@@ -132,7 +132,16 @@ export async function revalidateParams(
   values: Record<string, number>
 ): Promise<RevalidateResult> {
   try {
-      const parameters = Object.entries(values).map(([key, value]) => ({ key, value, unit: null }));
+      const defaultUnits: Record<string, string> = {
+          pressure: 'mTorr',
+          source_power: 'W',
+          bias_power: 'W',
+      };
+      const parameters = Object.entries(values).map(([key, value]) => ({
+          key,
+          value,
+          unit: defaultUnits[key] ?? '',
+      }));
       const res = await fetch(`/api/chat/messages/${messageId}/validations`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
