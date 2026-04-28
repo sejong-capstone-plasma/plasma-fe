@@ -42,7 +42,7 @@ export const colors = {
     surface: {
       white:      '#ffffff',
       background: '#ffffff',
-      card:       '#f8fafc',
+      card:       '#ffffff',
     },
   } as const;
 

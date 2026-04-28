@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import type { PredictionHistoryItem } from '../App';
+import { fetchSessions } from '../api/analysis';
 import { colors, typography } from '../styles/tokens';
 import { SquarePen } from 'lucide-react';
 
@@ -19,16 +21,12 @@ interface AnalysisHistory {
 interface SidebarProps {
   onNewChat: () => void;
   onSelectSession?: (sessionId: string) => void;
+  predictionHistory?: PredictionHistoryItem[];
+  onSelectHistory?: (item: PredictionHistoryItem) => void;
 }
 
 // ── 상수 ──────────────────────────────────────────────
 const BREAKPOINT = 1000;
-
-const MOCK_HISTORY: AnalysisHistory[] = [
-  { id: '1', taskType: 'OPTIMIZATION', summary: 'P 8mTorr / SP 450W / BP 80W' },
-  { id: '2', taskType: 'PREDICTION',   summary: 'P 20mTorr / SP 500W / BP 200W' },
-  { id: '3', taskType: 'OPTIMIZATION', summary: 'P 5mTorr / SP 800W / BP 150W' },
-];
 
 const TASK_LABEL: Record<AnalysisHistory['taskType'], string> = {
   PREDICTION:   '공정 조건 분석',
@@ -55,9 +53,11 @@ interface TabContentProps {
   onSelect: (id: string) => void;
   sessions: ChatSession[];
   sessionsLoading: boolean;
+  predictionHistory?: PredictionHistoryItem[];
+  onSelectHistory?: (item: PredictionHistoryItem) => void;
 }
 
-const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLoading }: TabContentProps) => (
+const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLoading, predictionHistory = [], onSelectHistory }: TabContentProps) => (
   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
     {/* 탭 헤더 */}
     <div style={{
@@ -117,56 +117,54 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
       </div>
     )}
 
-    {/* 히스토리 목록 — mock 유지 */}
+    {/* 히스토리 목록 — 실제 데이터 */}
     {tab === 'history' && (
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-        {MOCK_HISTORY.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onSelect(item.id)}
-            style={{ width: '100%', padding: '1px 8px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
-          >
-            <div
-              className={`hover:bg-slate-200 transition-colors rounded-lg ${activeId === item.id ? 'bg-slate-200' : ''}`}
-              style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 10px' }}
+        {predictionHistory.length === 0 ? (
+          <p style={{ fontSize: typography.size.xs, color: colors.slate[400], padding: '12px 18px' }}>
+            분석 히스토리가 없습니다.
+          </p>
+        ) : (
+          predictionHistory.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onSelectHistory?.(item)}
+              style={{ width: '100%', padding: '1px 8px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              <span style={{
-                fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-                color: colors.primary[600], backgroundColor: colors.primary[50],
-                padding: '1px 6px', borderRadius: '3px',
-                border: `1px solid ${colors.primary[100]}`,
-                alignSelf: 'flex-start',
-              }}>
-                {TASK_LABEL[item.taskType]}
-              </span>
-              <span style={{
-                fontSize: typography.size.sm, color: colors.slate[700],
-                fontWeight: typography.weight.medium,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {item.summary}
-              </span>
-            </div>
-          </button>
-        ))}
+              <div
+                className={`hover:bg-slate-200 transition-colors rounded-lg ${activeId === item.id ? 'bg-slate-200' : ''}`}
+                style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 10px' }}
+              >
+                <span style={{
+                  fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                  color: colors.primary[600], backgroundColor: colors.primary[50],
+                  padding: '1px 6px', borderRadius: '3px',
+                  border: `1px solid ${colors.primary[100]}`,
+                  alignSelf: 'flex-start',
+                }}>
+                  예측
+                </span>
+                <span style={{
+                  fontSize: typography.size.sm, color: colors.slate[700],
+                  fontWeight: typography.weight.medium,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {item.label}
+                </span>
+                <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>
+                  Score {Number(item.predictionData.prediction_result.etch_score.value.toFixed(1))}
+                </span>
+              </div>
+            </button>
+          ))
+        )}
       </div>
     )}
   </div>
 );
 
-// ── 세션 목록 fetch ────────────────────────────────────
-async function fetchSessions(): Promise<ChatSession[]> {
-  try {
-    const res = await fetch('/api/chat/messages/sessions');
-    if (!res.ok) return [];
-    return await res.json();
-  } catch {
-    return [];
-  }
-}
-
 // ── 메인 컴포넌트 ──────────────────────────────────────
-export default function Sidebar({ onNewChat, onSelectSession }: SidebarProps) {
+export default function Sidebar({ onNewChat, onSelectSession, predictionHistory = [], onSelectHistory }: SidebarProps) {
   const [isOpen, setIsOpen]     = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab]           = useState<'chat' | 'history'>('chat');
@@ -207,10 +205,15 @@ export default function Sidebar({ onNewChat, onSelectSession }: SidebarProps) {
     onTabChange: setTab,
     onSelect: (id: string) => {
       setActiveId(id);
-      onSelectSession?.(id);
+      if (tab === 'chat') onSelectSession?.(id);
     },
     sessions,
     sessionsLoading,
+    predictionHistory,
+    onSelectHistory: (item: PredictionHistoryItem) => {
+      setActiveId(item.id);
+      onSelectHistory?.(item);
+    },
   };
 
   // ── 오버레이 모드 (모바일) ──

@@ -3,6 +3,7 @@ import { colors, typography } from '../styles/tokens';
 
 interface InputAreaProps {
   onSend: (message: string) => void;
+  onCancel?: () => void;
   onTextChange?: (text: string) => void;
   onFirstFocus?: () => void;
   isTyping?: boolean;
@@ -13,7 +14,7 @@ export interface InputAreaHandle {
 }
 
 const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
-  ({ onSend, onTextChange, onFirstFocus, isTyping }, ref) => {
+  ({ onSend, onCancel, onTextChange, onFirstFocus, isTyping }, ref) => {
     const [text, setText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -39,10 +40,19 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
       }
     };
 
+    const handleButtonClick = () => {
+      if (isTyping) {
+        onCancel?.();
+      } else {
+        handleSend();
+      }
+    };
+
     const canSend = Boolean(text.trim()) && !isTyping;
+    const buttonActive = isTyping || canSend;
 
     return (
-      <div className="pb-3">
+      <div className="pb-3 px-6">
         <div className="max-w-3xl mx-auto">
           <div
             className="relative flex flex-col rounded-[18px] overflow-hidden"
@@ -71,26 +81,40 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
             />
             <div className="flex justify-end items-center px-3 pb-3">
               <button
-                onClick={handleSend}
-                disabled={!canSend}
+                onClick={handleButtonClick}
+                disabled={!buttonActive}
                 style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: '30%',
+                  backgroundColor: isTyping ? '#FFFFFF' : '#FFFFFF',
+                  borderRadius: isTyping ? '8px' : '30%',
                   padding: '8px',
-                  boxShadow: canSend ? '0 0 3px rgba(0,0,0,0.15)' : 'none',
-                  transition: 'all 0.3s ease',
-                  cursor: canSend ? 'pointer' : 'default',
-                  opacity: canSend ? 1 : 0.45,
+                  boxShadow: buttonActive ? '0 0 3px rgba(0,0,0,0.15)' : 'none',
+                  transition: 'all 0.2s ease',
+                  cursor: buttonActive ? 'pointer' : 'default',
+                  opacity: buttonActive ? 1 : 0.45,
+                  width: '35px',
+                  height: '35px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
-                className="hover:scale-110 hover:shadow-md active:scale-95 flex items-center justify-center"
-                title="분석 전송"
+                className="hover:scale-110 hover:shadow-md active:scale-95"
+                title={isTyping ? '전송 취소' : '분석 전송'}
               >
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
-                  stroke={canSend ? colors.primary[500] : colors.slate[400]}
-                  strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="19" x2="12" y2="5" />
-                  <polyline points="5 12 12 5 19 12" />
-                </svg>
+                {isTyping ? (
+                  // 정지 아이콘 
+                  <svg width="19" height="19" viewBox="0 0 19 19" fill="none">
+                    <circle cx="9.5" cy="9.5" r="8.5" stroke={colors.slate[500]} strokeWidth="2" />
+                    <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill={colors.slate[500]} />
+                  </svg>
+                ) : (
+                  // 전송 아이콘 
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
+                    stroke={canSend ? colors.primary[500] : colors.slate[400]}
+                    strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5" />
+                    <polyline points="5 12 12 5 19 12" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>

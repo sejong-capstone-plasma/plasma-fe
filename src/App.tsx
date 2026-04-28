@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import PredictionPanel from './components/PredictionPanel';
 import ChatArea from './components/ChatArea';
 import Header from './components/Header';
 import InputArea, { type InputAreaHandle } from './components/InputArea';
@@ -9,12 +10,27 @@ import {
   revalidateParams, confirmValidation,
 } from './api/analysis';
 import { colors, typography } from './styles/tokens';
-import type { ExtractValidationError } from './types/api';
+import type { ExtractValidationError, PredictionResult } from './types/api';
+
+interface ProcessParams {
+  pressure:     number;
+  source_power: number;
+  bias_power:   number;
+}
+
+export interface PredictionHistoryItem {
+  id:            string;
+  createdAt:     Date;
+  label:         string;
+  processParams: ProcessParams;
+  predictionData: import('./types/api').PredictionResult;
+}
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry';
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result';
+  loadingText?: string;
 }
 
 const WELCOME_MESSAGE =
@@ -38,19 +54,24 @@ export default function App() {
   const hasWelcomed  = useRef(false);
   const lastInput    = useRef<string>('');
   const inputAreaRef = useRef<InputAreaHandle>(null);
+  const abortCtrlRef = useRef<AbortController | null>(null);
 
-  // 현재 대화의 messageId / validationId 저장
   const currentMessageId    = useRef<number>(-1);
   const currentValidationId = useRef<number>(-1);
+  // 이전 추출 단계에서 value가 존재했던 파라미터 전체 보관
+  const lastKnownParams     = useRef<Record<string, number>>({});
 
-  const [isFocused, setIsFocused] = useState(false);
-  const [isTyping,  setIsTyping]  = useState(false);
+  const [isFocused, setIsFocused]         = useState(false);
+  const [isTyping,  setIsTyping]          = useState(false);
+  const [isPanelOpen, setIsPanelOpen]     = useState(false);
+  const [predictionData, setPredictionData]   = useState<PredictionResult | null>(null);
+  const [processParams, setProcessParams]       = useState<ProcessParams | null>(null);
+  const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryItem[]>([]);
 
   // ── 말풍선 타이핑 효과 ──────────────────────────────
   const typeMessage = (text: string, speed = 18): Promise<void> => {
     return new Promise((resolve) => {
       let i = 0;
-      setMessages(prev => [...prev, { role: 'assistant', content: '', type: 'default' }]);
       const interval = setInterval(() => {
         i++;
         setMessages(prev => {
@@ -82,21 +103,48 @@ export default function App() {
     }, 400);
   };
 
+  // ── 전송 취소 ─────────────────────────────────────────
+  const handleCancel = () => {
+    abortCtrlRef.current?.abort();
+    abortCtrlRef.current = null;
+    setMessages(prev => {
+      const last = prev[prev.length - 1];
+      if (last?.role === 'assistant' && last.content === '') {
+        return [...prev.slice(0, -1), { role: 'assistant', content: '응답이 중지되었습니다.', type: 'default' }];
+      }
+      return prev;
+    });
+    setIsTyping(false);
+    isSending.current = false;
+    setTimeout(() => inputAreaRef.current?.focus(), 50);
+  };
+
   const handleSend = async (content: string) => {
     if (isSending.current) return;
     isSending.current = true;
     lastInput.current = content;
 
+    const ctrl = new AbortController();
+    abortCtrlRef.current = ctrl;
+
     setMessages(prev => [...prev, { role: 'user', content }]);
+    setMessages(prev => [...prev, { role: 'assistant', content: '', type: 'default' }]);
     setIsTyping(true);
 
-    const [{ messageId, validationId, response: result }] = await Promise.all([
-      extractParams(content),
+    const [{ messageId, validationId, response: result, allParams }] = await Promise.all([
+      extractParams(content, ctrl.signal),
       new Promise(r => setTimeout(r, 1200)),
     ]);
 
+    // 취소된 경우
+    if (!result.success && 'message' in result && result.message === '__CANCELLED__') {
+      isSending.current = false;
+      return;
+    }
+
     currentMessageId.current    = messageId;
     currentValidationId.current = validationId;
+    lastKnownParams.current     = allParams; // 이번 추출에서 얻은 파라미터 저장
 
     if (result.success) {
       await typeMessage(result.message);
@@ -120,29 +168,107 @@ export default function App() {
 
     setIsTyping(false);
     isSending.current = false;
+    abortCtrlRef.current = null;
   };
 
   // ── 분석 실행 확정 ────────────────────────────────────
-  const handleConfirm = async () => {
+  const handleConfirm = async (taskType: 'PREDICTION' | 'OPTIMIZATION') => {
     const mId = currentMessageId.current;
     const vId = currentValidationId.current;
     if (mId === -1 || vId === -1) return;
-    // TODO: confirm 후 결과 카드 표시
-    await confirmValidation(mId, vId);
-    console.log('분석 실행 확정 — messageId:', mId, 'validationId:', vId);
+
+    if (taskType === 'OPTIMIZATION') {
+      console.log('최적화 요청 — 파이프라인 준비 중');
+      return;
+    }
+
+    setMessages(prev => [...prev, {
+      role: 'assistant', content: '', type: 'default',
+      loadingText: '예측 분석을 실행하고 있습니다...',
+    }]);
+    setIsTyping(true);
+
+    const confirmRes = await confirmValidation(mId, vId);
+
+    setMessages(prev => prev.filter(m => m.loadingText !== '예측 분석을 실행하고 있습니다...'));
+    setIsTyping(false);
+
+    if (!confirmRes) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        type: 'error-retry',
+      }]);
+      return;
+    }
+
+    if (confirmRes.predictionError) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '예측 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+        type: 'error-retry',
+      }]);
+      return;
+    }
+
+    if (confirmRes.prediction) {
+      const pred = confirmRes.prediction;
+      let params: ProcessParams | null = null;
+      if (confirmRes.validation?.parameters) {
+        const getVal = (key: string) =>
+          confirmRes.validation.parameters.find(p => p.key === key)?.value ?? 0;
+        params = {
+          pressure:     getVal('pressure'),
+          source_power: getVal('source_power'),
+          bias_power:   getVal('bias_power'),
+        };
+      }
+
+      const historyId = `pred-${Date.now()}`;
+      const historyItem: PredictionHistoryItem = {
+        id:             historyId,
+        createdAt:      new Date(),
+        label:          params ? `P ${params.pressure}mTorr / SP ${params.source_power}W / BP ${params.bias_power}W` : '예측 결과',
+        processParams:  params ?? { pressure: 0, source_power: 0, bias_power: 0 },
+        predictionData: pred,
+      };
+      setPredictionHistory(prev => [historyItem, ...prev]);
+
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: JSON.stringify({ historyId, etch_score: pred.prediction_result.etch_score.value, label: historyItem.label }),
+        type: 'prediction-result',
+      }]);
+
+      setPredictionData(pred);
+      if (params) setProcessParams(params);
+      setIsPanelOpen(true);
+    }
   };
 
-  // ── 재검증 → param-confirm 카드로 다시 표시 ─────────
+  // ── 재검증 ────────────────────────────────────────────
   const handleReanalyze = async (values: Record<string, number>) => {
     const mId = currentMessageId.current;
     if (mId === -1) return;
 
+    const ctrl = new AbortController();
+    abortCtrlRef.current = ctrl;
+
+    // 이전 추출에서 얻은 VALID 파라미터 + 사용자가 수정 입력한 값 병합
+    // values가 lastKnownParams를 덮어쓰므로 사용자 입력이 우선 적용됨
+    const mergedValues = { ...lastKnownParams.current, ...values };
+
+    setMessages(prev => [...prev, { role: 'assistant', content: '', type: 'default' }]);
     setIsTyping(true);
 
     const [{ validationId, response: result }] = await Promise.all([
-      revalidateParams(mId, values),
+      revalidateParams(mId, mergedValues, ctrl.signal),
       new Promise(r => setTimeout(r, 1200)),
     ]);
+
+    if (!result.success && 'message' in result && result.message === '__CANCELLED__') {
+      return;
+    }
 
     currentValidationId.current = validationId;
 
@@ -164,6 +290,7 @@ export default function App() {
     }
 
     setIsTyping(false);
+    abortCtrlRef.current = null;
   };
 
   const handleRetry = () => {
@@ -178,7 +305,9 @@ export default function App() {
     setMessages([]);
 
     const sessionMessages = await fetchSessionMessages(sessionId);
-    const restored: Message[] = [];
+    const restored: Message[] = [
+      { role: 'assistant', content: WELCOME_MESSAGE },
+    ];
 
     for (const msg of sessionMessages) {
       restored.push({ role: 'user', content: msg.inputText });
@@ -199,12 +328,20 @@ export default function App() {
   };
 
   return (
+    <>
     <div className="flex h-screen bg-white text-slate-900 overflow-hidden font-sans">
       <Sidebar
+        predictionHistory={predictionHistory}
+        onSelectHistory={(item) => {
+          setPredictionData(item.predictionData);
+          setProcessParams(item.processParams);
+          setIsPanelOpen(true);
+        }}
         onNewChat={() => {
           setMessages([]);
           hasWelcomed.current = false;
           setIsFocused(false);
+          lastKnownParams.current = {};
           resetSession();
         }}
         onSelectSession={handleSelectSession}
@@ -212,7 +349,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <div className="flex-1 flex flex-col overflow-hidden px-8">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {messages.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-8">
               <h1
@@ -235,16 +372,33 @@ export default function App() {
               onConfirm={handleConfirm}
               onReanalyze={handleReanalyze}
               onRetry={handleRetry}
+              onOpenPanel={(historyId) => {
+                const item = predictionHistory.find(h => h.id === historyId);
+                if (item) {
+                  setPredictionData(item.predictionData);
+                  setProcessParams(item.processParams);
+                  setIsPanelOpen(true);
+                }
+              }}
             />
           )}
           <InputArea
             ref={inputAreaRef}
             onSend={handleSend}
+            onCancel={handleCancel}
             onFirstFocus={handleFirstFocus}
             isTyping={isTyping}
           />
         </div>
       </div>
     </div>
+
+      <PredictionPanel
+        isOpen={isPanelOpen}
+        onClose={() => setIsPanelOpen(false)}
+        data={predictionData}
+        processParams={processParams}
+      />
+    </>
   );
 }

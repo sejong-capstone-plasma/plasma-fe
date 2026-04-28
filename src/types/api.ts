@@ -77,3 +77,28 @@ export type ExtractResponse =
   | ExtractValidationError
   | ExtractFormatError
   | ExtractServerError;
+// ── 예측 결과 타입 ─────────────────────────────────────
+export interface PredictionResultField {
+  value: number;
+  unit:  string;
+}
+
+export interface PredictionResult {
+  request_id:        string;
+  process_type:      string;
+  prediction_result: {
+    ion_flux:   PredictionResultField;
+    ion_energy: PredictionResultField;
+    etch_score: PredictionResultField;
+  };
+  explanation: {
+    summary: string;
+    details: string[];
+  };
+}
+
+export interface ConfirmResponse {
+  validation:      BackendValidationResponse;
+  prediction:      PredictionResult | null;
+  predictionError: string | null;
+}

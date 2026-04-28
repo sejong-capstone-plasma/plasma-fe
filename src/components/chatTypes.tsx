@@ -7,10 +7,13 @@ interface ChatProps {
   content: string;
   isTyping?: boolean;
   isLastAssistant?: boolean;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry';
-  onConfirm?: () => void;
+  isLatest?: boolean;
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result';
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION') => void;
   onReanalyze?: (values: Record<string, number>) => void;
   onRetry?: () => void;
+  loadingText?: string;
+  onOpenPanel?: (historyId: string) => void;
 }
 
 // ── 마크다운 굵기 파싱 ──────────────────────────────────
@@ -30,20 +33,30 @@ const renderContent = (text: string) => {
 
 // ── 파라미터 확인 카드 ──────────────────────────────────
 const PARAM_LABEL: Record<string, string> = {
-  pressure:     '압력',
+  pressure: '압력',
   source_power: '소스 파워',
-  bias_power:   '바이어스 파워',
+  bias_power: '바이어스 파워',
 };
 
 const PARAM_UNIT: Record<string, string> = {
-  pressure:     'mTorr',
+  pressure: 'mTorr',
   source_power: 'W',
-  bias_power:   'W',
+  bias_power: 'W',
+};
+
+const PARAM_RANGE: Record<string, string> = {
+  pressure:     '2 ~ 10 mTorr',
+  source_power: '100 ~ 500 W',
+  bias_power:   '0 ~ 1500 W',
 };
 
 type ParamMap = Record<string, { value: number; unit: string; status: 'VALID' }>;
 
-function ParamConfirmCard({ data, onConfirm }: { data: ExtractSuccessResponse; onConfirm?: () => void }) {
+function ParamConfirmCard({ data, onConfirm, isLatest }: {
+  data: ExtractSuccessResponse;
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION') => void;
+  isLatest?: boolean;
+}) {
   const [params, setParams] = useState<ParamMap>(
     data.process_params as unknown as ParamMap
   );
@@ -51,6 +64,7 @@ function ParamConfirmCard({ data, onConfirm }: { data: ExtractSuccessResponse; o
   const [editValue, setEditValue] = useState<string>('');
 
   const startEdit = (key: string, currentValue: number) => {
+    if (!isLatest) return;
     setEditingField(key);
     setEditValue(String(currentValue));
   };
@@ -77,6 +91,7 @@ function ParamConfirmCard({ data, onConfirm }: { data: ExtractSuccessResponse; o
       display: 'flex',
       flexDirection: 'column',
       gap: '4px',
+      opacity: isLatest ? 1 : 0.5,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '10px' }}>
         <span style={{
@@ -118,31 +133,57 @@ function ParamConfirmCard({ data, onConfirm }: { data: ExtractSuccessResponse; o
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: typography.size.sm, fontWeight: typography.weight.medium, color: colors.slate[900]}}>
+                <span style={{ fontSize: typography.size.sm, fontWeight: typography.weight.medium, color: colors.slate[900] }}>
                   {field.value}{' '}
                   <span style={{ color: colors.slate[400], fontWeight: typography.weight.regular }}>{field.unit}</span>
                 </span>
-                <button onClick={() => startEdit(key, field.value)} title="수정"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: colors.slate[400], borderRadius: '4px', transition: 'color 0.15s' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = colors.slate[700])}
-                  onMouseLeave={e => (e.currentTarget.style.color = colors.slate[400])}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </button>
+                {isLatest && (
+                  <button onClick={() => startEdit(key, field.value)} title="수정"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: colors.slate[400], borderRadius: '4px', transition: 'color 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = colors.slate[700])}
+                    onMouseLeave={e => (e.currentTarget.style.color = colors.slate[400])}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
       ))}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '10px', borderTop: `1px solid ${colors.slate[200]}` }}>
-        <button onClick={onConfirm}
-          style={{ fontSize: typography.size.xs, fontWeight: typography.weight.medium, color: colors.surface.white, backgroundColor: colors.primary[500], border: 'none', borderRadius: '6px', padding: '6px 14px', cursor: 'pointer', transition: 'background-color 0.15s ease' }}
-          onMouseEnter={e => (e.currentTarget.style.backgroundColor = colors.primary[600])}
-          onMouseLeave={e => (e.currentTarget.style.backgroundColor = colors.primary[500])}>
-          분석 실행
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '10px', borderTop: `1px solid ${colors.slate[200]}` }}>
+        <button
+          onClick={() => onConfirm?.('PREDICTION')}
+          disabled={!isLatest}
+          style={{
+            fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+            color: colors.surface.white,
+            backgroundColor: isLatest ? colors.primary[500] : colors.slate[300],
+            border: 'none', borderRadius: '6px', padding: '6px 14px',
+            cursor: isLatest ? 'pointer' : 'default',
+            transition: 'background-color 0.15s ease',
+          }}
+          onMouseEnter={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
+          onMouseLeave={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[500]; }}>
+          예측
+        </button>
+        <button
+          onClick={() => onConfirm?.('OPTIMIZATION')}
+          disabled={!isLatest}
+          style={{
+            fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+            color: colors.surface.white,
+            backgroundColor: isLatest ? colors.primary[500] : colors.slate[300],
+            border: 'none', borderRadius: '6px', padding: '6px 14px',
+            cursor: isLatest ? 'pointer' : 'default',
+            transition: 'background-color 0.15s ease',
+          }}
+          onMouseEnter={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
+          onMouseLeave={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[500]; }}>
+          최적화
         </button>
       </div>
     </div>
@@ -151,18 +192,23 @@ function ParamConfirmCard({ data, onConfirm }: { data: ExtractSuccessResponse; o
 
 // ── 파라미터 오류 카드 ──────────────────────────────────
 const FIELD_LABEL: Record<string, string> = {
-  pressure:     '압력',
+  pressure: '압력',
   source_power: '소스 파워',
-  bias_power:   '바이어스 파워',
+  bias_power: '바이어스 파워',
 };
 
-function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; onReanalyze?: (values: Record<string, number>) => void }) {
+function ParamErrorCard({ data, onReanalyze, isLatest }: {
+  data: ExtractValidationError;
+  onReanalyze?: (values: Record<string, number>) => void;
+  isLatest?: boolean;
+}) {
   const reenterFields = [...data.missing_fields, ...data.ambiguous_fields];
   const [inputValues, setInputValues] = useState<Record<string, string>>(
     Object.fromEntries(reenterFields.map(f => [f, '']))
   );
 
   const handleReanalyze = () => {
+    if (!isLatest) return;
     const parsed: Record<string, number> = {};
     for (const f of reenterFields) {
       const v = parseFloat(inputValues[f]);
@@ -172,7 +218,7 @@ function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; o
     onReanalyze?.(parsed);
   };
 
-  const allFilled = reenterFields.every(f => inputValues[f].trim() !== '' && !isNaN(parseFloat(inputValues[f])));
+  const allFilled = isLatest && reenterFields.every(f => inputValues[f].trim() !== '' && !isNaN(parseFloat(inputValues[f])));
 
   return (
     <div style={{
@@ -185,8 +231,8 @@ function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; o
       display: 'flex',
       flexDirection: 'column',
       gap: '12px',
+      opacity: isLatest ? 1 : 0.5,
     }}>
-      {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <span style={{
           fontSize: typography.size.xs,
@@ -201,22 +247,17 @@ function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; o
         </span>
       </div>
 
-      {/* 입력 필드 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {reenterFields.map(f => (
           <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{
-              fontSize: typography.size.xs,
-              color: colors.slate[500],
-              minWidth: '72px',
-              flexShrink: 0,
-            }}>
+            <span style={{ fontSize: typography.size.xs, color: colors.slate[500], minWidth: '72px', flexShrink: 0 }}>
               {FIELD_LABEL[f] ?? f}
             </span>
             <input
               type="number"
-              placeholder={`수치 입력 (${PARAM_UNIT[f] ?? ''})`}
+              placeholder={PARAM_RANGE[f] ?? `수치 입력 (${PARAM_UNIT[f] ?? ''})`}
               value={inputValues[f]}
+              disabled={!isLatest}
               onChange={e => setInputValues(prev => ({ ...prev, [f]: e.target.value }))}
               onKeyDown={e => { if (e.key === 'Enter' && allFilled) handleReanalyze(); }}
               style={{
@@ -227,10 +268,11 @@ function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; o
                 borderRadius: '6px',
                 padding: '5px 10px',
                 outline: 'none',
-                backgroundColor: colors.surface.white,
+                backgroundColor: isLatest ? colors.surface.white : colors.slate[100],
                 transition: 'border-color 0.15s',
+                cursor: isLatest ? 'text' : 'default',
               }}
-              onFocus={e => (e.currentTarget.style.borderColor = colors.primary[400])}
+              onFocus={e => { if (isLatest) e.currentTarget.style.borderColor = colors.primary[400]; }}
               onBlur={e => (e.currentTarget.style.borderColor = colors.slate[300])}
             />
             <span style={{ fontSize: typography.size.xs, color: colors.slate[400], flexShrink: 0 }}>
@@ -240,7 +282,6 @@ function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; o
         ))}
       </div>
 
-      {/* 재분석 실행 버튼 */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '10px', borderTop: `1px solid ${colors.slate[200]}` }}>
         <button
           onClick={handleReanalyze}
@@ -267,9 +308,9 @@ function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; o
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────
-export default function ChatTypes({ role, content, isTyping, isLastAssistant, type = 'default', onConfirm, onReanalyze, onRetry }: ChatProps) {
+export default function ChatTypes({ role, content, isTyping, isLastAssistant, isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText, onOpenPanel }: ChatProps) {
   const isUser = role === 'user';
-  const isWaiting    = isTyping && content === '';
+  const isWaiting = isTyping && content === '';
   const isResponding = isTyping && content !== '';
   const PERIMETER = 56;
 
@@ -277,7 +318,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, ty
     if (type === 'param-confirm') {
       try {
         const data = JSON.parse(content) as ExtractSuccessResponse;
-        return <ParamConfirmCard data={data} onConfirm={onConfirm} />;
+        return <ParamConfirmCard data={data} onConfirm={onConfirm} isLatest={isLatest} />;
       } catch {
         return <span style={{ color: colors.semantic.error }}>파라미터 파싱 오류</span>;
       }
@@ -285,13 +326,63 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, ty
     if (type === 'param-error') {
       try {
         const data = JSON.parse(content) as ExtractValidationError;
-        return <ParamErrorCard data={data} onReanalyze={onReanalyze} />;
+        return <ParamErrorCard data={data} onReanalyze={onReanalyze} isLatest={isLatest} />;
       } catch {
         return <span style={{ color: colors.semantic.error }}>오류 파싱 실패</span>;
       }
     }
+    if (type === 'prediction-result') {
+      try {
+        const { historyId, etch_score, label } = JSON.parse(content);
+        return (
+          <div style={{
+            border: `1.5px solid ${colors.slate[200]}`,
+            borderRadius: '10px',
+            padding: '12px 14px',
+            backgroundColor: colors.surface.card,
+            maxWidth: '400px',
+            minWidth: '280px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{
+                fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                color: colors.primary[600], backgroundColor: colors.primary[50],
+                padding: '2px 8px', borderRadius: '4px', border: `1px solid ${colors.primary[100]}`,
+                alignSelf: 'flex-start',
+              }}>
+                예측 완료
+              </span>
+              <span style={{ fontSize: typography.size.sm, color: colors.slate[700], marginTop: '2px' }}>
+                {label}
+              </span>
+              <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>
+                Etch Score <span style={{ fontWeight: typography.weight.medium, color: colors.slate[700] }}>{Number(etch_score.toFixed(1))}</span> / 100
+              </span>
+            </div>
+            <button
+              onClick={() => onOpenPanel?.(historyId)}
+              style={{
+                fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                color: colors.surface.white, backgroundColor: colors.primary[500],
+                border: 'none', borderRadius: '6px', padding: '6px 14px',
+                cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = colors.primary[600])}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = colors.primary[500])}
+            >
+              결과 보기
+            </button>
+          </div>
+        );
+      } catch {
+        return null;
+      }
+    }
     if (type === 'error') {
-      // INVALID_JSON — 재시도 버튼 없음
       return (
         <span style={{ color: colors.semantic.error, fontSize: typography.size.md }}>
           {content}
@@ -299,7 +390,6 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, ty
       );
     }
     if (type === 'error-retry') {
-      // 서버/네트워크 오류 — 재시도 버튼 포함
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ color: colors.semantic.error, fontSize: typography.size.md }}>
@@ -322,7 +412,6 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, ty
             onMouseEnter={e => (e.currentTarget.style.backgroundColor = colors.semantic.errorBorder)}
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = colors.semantic.errorBg)}
           >
-            {/* 원형 화살표 아이콘 */}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -364,7 +453,14 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, ty
               <div style={{ width: '16px', height: '16px', backgroundColor: colors.primary[500], borderRadius: '6px' }} />
             )}
             {isWaiting && (
-              <div style={{ width: '16px', height: '16px', backgroundColor: colors.primary[500], borderRadius: '6px', animation: 'breathe 1.8s ease-in-out infinite' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '16px', height: '16px', backgroundColor: colors.primary[500], borderRadius: '6px', animation: 'breathe 1.8s ease-in-out infinite', flexShrink: 0 }} />
+                {loadingText && (
+                  <span style={{ fontSize: typography.size.sm, color: colors.slate[400] }}>
+                    {loadingText}
+                  </span>
+                )}
+              </div>
             )}
             {isResponding && (
               <svg width="16" height="16" viewBox="0 0 16 16" style={{ display: 'block', overflow: 'visible' }}>

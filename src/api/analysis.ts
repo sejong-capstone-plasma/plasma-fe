@@ -1,5 +1,6 @@
 import type {
   BackendValidationResponse,
+  ConfirmResponse,
   ExtractResponse,
   ExtractSuccessResponse,
   ExtractValidationError,
@@ -27,7 +28,7 @@ export function adaptResponse(backend: BackendValidationResponse): ExtractRespon
       const result: ExtractSuccessResponse = {
           success:      true,
           code:         'READY_FOR_PREDICTION',
-          message:      '파라미터가 정상적으로 추출되었습니다. 아래 조건으로 분석을 진행합니다.',
+          message:      '파라미터가 정상적으로 추출되었습니다. 아래 조건으로 분석을 진행할까요?',
           request_id:   backend.requestId,
           process_type: backend.processType ?? '',
           task_type:    (backend.taskType as 'PREDICTION' | 'OPTIMIZATION') ?? 'PREDICTION',
@@ -76,10 +77,15 @@ export function getCurrentSessionId(): string {
   return currentSessionId;
 }
 
-// ── 세션 메시지 조회 ──────────────────────────────────
-export async function fetchSessionMessages(sessionId: string): Promise<BackendChatMessageResponse[]> {
+// ── 공통 fetch 옵션 (쿠키 포함) ──────────────────────
+const FETCH_OPTS = {
+  credentials: 'include' as const,
+};
+
+// ── 세션 목록 조회 ────────────────────────────────────
+export async function fetchSessions(): Promise<{ sessionId: string; title: string; lastMessageAt: string; messageCount: number }[]> {
   try {
-      const res = await fetch(`/api/chat/messages/sessions/${sessionId}`);
+      const res = await fetch('/api/chat/messages/sessions', { ...FETCH_OPTS });
       if (!res.ok) return [];
       return await res.json();
   } catch {
@@ -87,84 +93,116 @@ export async function fetchSessionMessages(sessionId: string): Promise<BackendCh
   }
 }
 
-// ── 메시지 전송 → messageId 포함 반환 ────────────────
-export interface ExtractResult {
-  messageId: number;
-  validationId: number;
-  response: ExtractResponse;
+// ── 세션 메시지 조회 ──────────────────────────────────
+export async function fetchSessionMessages(sessionId: string): Promise<BackendChatMessageResponse[]> {
+  try {
+      const res = await fetch(`/api/chat/messages/sessions/${sessionId}`, { ...FETCH_OPTS });
+      if (!res.ok) return [];
+      return await res.json();
+  } catch {
+      return [];
+  }
 }
 
-export async function extractParams(inputText: string): Promise<ExtractResult> {
+// ── 메시지 전송 ───────────────────────────────────────
+export interface ExtractResult {
+  messageId:    number;
+  validationId: number;
+  response:     ExtractResponse;
+  allParams:    Record<string, number>; // VALID 포함 전체 파라미터 값
+}
+
+export async function extractParams(inputText: string, signal?: AbortSignal): Promise<ExtractResult> {
   try {
       const res = await fetch('/api/chat/messages', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ sessionId: currentSessionId, inputText }),
+          signal,
+          ...FETCH_OPTS,
       });
 
       if (!res.ok) {
-          if (res.status >= 500) return { messageId: -1, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
-          return { messageId: -1, validationId: -1, response: { success: false, code: 'INVALID_JSON', message: '입력을 처리하지 못했습니다. 다시 입력해 주세요.', errors: [] } };
+          if (res.status >= 500) return { messageId: -1, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }, allParams: {} };
+          return { messageId: -1, validationId: -1, response: { success: false, code: 'INVALID_JSON', message: '입력을 처리하지 못했습니다. 다시 입력해 주세요.', errors: [] }, allParams: {} };
       }
 
       const data: BackendChatMessageResponse = await res.json();
       const validation = data.validations?.[0];
-      if (!validation) return { messageId: data.messageId, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
+      if (!validation) return { messageId: data.messageId, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }, allParams: {} };
+
+      // value가 존재하는 파라미터 전체 수집 (VALID뿐 아니라 추출된 모든 값 포함)
+      const allParams: Record<string, number> = {};
+      validation.parameters.forEach(p => {
+          if (p.value != null) allParams[p.key] = p.value as number;
+      });
 
       return {
           messageId:    data.messageId,
           validationId: validation.validationId,
           response:     adaptResponse(validation),
+          allParams,
       };
-  } catch {
-      return { messageId: -1, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
+  } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+          return { messageId: -1, validationId: -1, response: { success: false, message: '__CANCELLED__' }, allParams: {} };
+      }
+      return { messageId: -1, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }, allParams: {} };
   }
 }
 
-// ── 재검증 (수정된 파라미터로 재분석) ────────────────
+// ── 재검증 ────────────────────────────────────────────
 export interface RevalidateResult {
   validationId: number;
-  response: ExtractResponse;
+  response:     ExtractResponse;
 }
+
+const UNIT_MAP: Record<string, string> = {
+  pressure:     'mTorr',
+  source_power: 'W',
+  bias_power:   'W',
+};
 
 export async function revalidateParams(
   messageId: number,
-  values: Record<string, number>
+  values: Record<string, number>,
+  signal?: AbortSignal,
 ): Promise<RevalidateResult> {
   try {
-      const defaultUnits: Record<string, string> = {
-          pressure: 'mTorr',
-          source_power: 'W',
-          bias_power: 'W',
-      };
-      const parameters = Object.entries(values).map(([key, value]) => ({
-          key,
-          value,
-          unit: defaultUnits[key] ?? '',
-      }));
+      const parameters = Object.entries(values).map(([key, value]) => ({ 
+        key,
+        value, 
+        unit: UNIT_MAP[key] ?? null }));
       const res = await fetch(`/api/chat/messages/${messageId}/validations`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ parameters }),
+          signal,
+          ...FETCH_OPTS,
       });
 
       if (!res.ok) return { validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
 
       const data: BackendValidationResponse = await res.json();
       return { validationId: data.validationId, response: adaptResponse(data) };
-  } catch {
+  } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+          return { validationId: -1, response: { success: false, message: '__CANCELLED__' } };
+      }
       return { validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
   }
 }
 
 // ── 분석 실행 확정 ────────────────────────────────────
-export async function confirmValidation(messageId: number, validationId: number): Promise<boolean> {
+export async function confirmValidation(messageId: number, validationId: number): Promise<ConfirmResponse | null> {
   try {
       const res = await fetch(`/api/chat/messages/${messageId}/validations/${validationId}/confirm`, {
           method: 'POST',
+          ...FETCH_OPTS,
       });
-      return res.ok;
+      if (!res.ok) return null;
+      return await res.json() as ConfirmResponse;
   } catch {
-      return false;
+      return null;
   }
 }
