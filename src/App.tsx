@@ -3,7 +3,11 @@ import ChatArea from './components/ChatArea';
 import Header from './components/Header';
 import InputArea, { type InputAreaHandle } from './components/InputArea';
 import Sidebar from './components/Sidebar';
-import { extractParams, resetSession, setSession, fetchSessionMessages, adaptResponse } from './api/analysis';
+import {
+  extractParams, resetSession, setSession,
+  fetchSessionMessages, adaptResponse,
+  revalidateParams, confirmValidation,
+} from './api/analysis';
 import { colors, typography } from './styles/tokens';
 import type { ExtractValidationError } from './types/api';
 
@@ -30,13 +34,34 @@ const WELCOME_MESSAGE =
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const isSending = useRef(false);
-  const hasWelcomed = useRef(false);
-  const lastInput = useRef<string>('');
+  const isSending    = useRef(false);
+  const hasWelcomed  = useRef(false);
+  const lastInput    = useRef<string>('');
   const inputAreaRef = useRef<InputAreaHandle>(null);
 
+  // 현재 대화의 messageId / validationId 저장
+  const currentMessageId    = useRef<number>(-1);
+  const currentValidationId = useRef<number>(-1);
+
   const [isFocused, setIsFocused] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
+  const [isTyping,  setIsTyping]  = useState(false);
+
+  // ── 말풍선 타이핑 효과 ──────────────────────────────
+  const typeMessage = (text: string, speed = 18): Promise<void> => {
+    return new Promise((resolve) => {
+      let i = 0;
+      setMessages(prev => [...prev, { role: 'assistant', content: '', type: 'default' }]);
+      const interval = setInterval(() => {
+        i++;
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { ...updated[updated.length - 1], content: text.slice(0, i) };
+          return updated;
+        });
+        if (i >= text.length) { clearInterval(interval); resolve(); }
+      }, speed);
+    });
+  };
 
   const handleFirstFocus = () => {
     if (hasWelcomed.current) return;
@@ -52,37 +77,9 @@ export default function App() {
       const interval = setInterval(() => {
         i++;
         setMessages([{ role: 'assistant', content: fullText.slice(0, i) }]);
-        if (i >= fullText.length) {
-          clearInterval(interval);
-          setIsTyping(false);
-        }
+        if (i >= fullText.length) { clearInterval(interval); setIsTyping(false); }
       }, 8);
     }, 400);
-  };
-
-  // ── 말풍선 타이핑 효과 ──────────────────────────────
-  const typeMessage = (text: string, speed = 18): Promise<void> => {
-    return new Promise((resolve) => {
-      let i = 0;
-      // 빈 말풍선 먼저 추가
-      setMessages(prev => [...prev, { role: 'assistant', content: '', type: 'default' }]);
-
-      const interval = setInterval(() => {
-        i++;
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: text.slice(0, i),
-          };
-          return updated;
-        });
-        if (i >= text.length) {
-          clearInterval(interval);
-          resolve();
-        }
-      }, speed);
-    });
   };
 
   const handleSend = async (content: string) => {
@@ -93,38 +90,31 @@ export default function App() {
     setMessages(prev => [...prev, { role: 'user', content }]);
     setIsTyping(true);
 
-    // 최소 1.2초 로딩 + API 호출 병렬
-    const [result] = await Promise.all([
+    const [{ messageId, validationId, response: result }] = await Promise.all([
       extractParams(content),
       new Promise(r => setTimeout(r, 1200)),
     ]);
 
+    currentMessageId.current    = messageId;
+    currentValidationId.current = validationId;
+
     if (result.success) {
       await typeMessage(result.message);
       setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: JSON.stringify(result),
-        type: 'param-confirm',
+        role: 'assistant', content: JSON.stringify(result), type: 'param-confirm',
       }]);
-
     } else if (!result.success && 'code' in result && result.code === 'INPUT_VALIDATION_FAILED') {
       const err = result as ExtractValidationError;
       await typeMessage(err.message);
       setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: JSON.stringify(err),
-        type: 'param-error',
+        role: 'assistant', content: JSON.stringify(err), type: 'param-error',
       }]);
-
     } else if ('code' in result && result.code === 'INVALID_JSON') {
       await typeMessage('입력을 처리하지 못했습니다. 다시 입력해 주세요.', 14);
       setTimeout(() => inputAreaRef.current?.focus(), 50);
-
     } else {
       setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
-        type: 'error-retry',
+        role: 'assistant', content: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', type: 'error-retry',
       }]);
     }
 
@@ -132,14 +122,48 @@ export default function App() {
     isSending.current = false;
   };
 
-  const handleConfirm = () => {
-    // TODO: 백엔드 연동 후 예측/최적화 API 호출 로직 구현
-    console.log('확인 버튼 클릭 — 다음 단계 진행');
+  // ── 분석 실행 확정 ────────────────────────────────────
+  const handleConfirm = async () => {
+    const mId = currentMessageId.current;
+    const vId = currentValidationId.current;
+    if (mId === -1 || vId === -1) return;
+    // TODO: confirm 후 결과 카드 표시
+    await confirmValidation(mId, vId);
+    console.log('분석 실행 확정 — messageId:', mId, 'validationId:', vId);
   };
 
-  const handleReanalyze = (values: Record<string, number>) => {
-    // TODO: 백엔드 연동 후 수정된 파라미터로 재분석 API 호출
-    console.log('재분석 실행 — 수정된 파라미터:', values);
+  // ── 재검증 → param-confirm 카드로 다시 표시 ─────────
+  const handleReanalyze = async (values: Record<string, number>) => {
+    const mId = currentMessageId.current;
+    if (mId === -1) return;
+
+    setIsTyping(true);
+
+    const [{ validationId, response: result }] = await Promise.all([
+      revalidateParams(mId, values),
+      new Promise(r => setTimeout(r, 1200)),
+    ]);
+
+    currentValidationId.current = validationId;
+
+    if (result.success) {
+      await typeMessage(result.message);
+      setMessages(prev => [...prev, {
+        role: 'assistant', content: JSON.stringify(result), type: 'param-confirm',
+      }]);
+    } else if (!result.success && 'code' in result && result.code === 'INPUT_VALIDATION_FAILED') {
+      const err = result as ExtractValidationError;
+      await typeMessage(err.message);
+      setMessages(prev => [...prev, {
+        role: 'assistant', content: JSON.stringify(err), type: 'param-error',
+      }]);
+    } else {
+      setMessages(prev => [...prev, {
+        role: 'assistant', content: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', type: 'error-retry',
+      }]);
+    }
+
+    setIsTyping(false);
   };
 
   const handleRetry = () => {
@@ -148,7 +172,6 @@ export default function App() {
   };
 
   const handleSelectSession = async (sessionId: string) => {
-    // 세션 전환 — 해당 세션 ID로 설정하고 메시지 복원
     setSession(sessionId);
     hasWelcomed.current = true;
     setIsFocused(true);
@@ -158,15 +181,9 @@ export default function App() {
     const restored: Message[] = [];
 
     for (const msg of sessionMessages) {
-      // 유저 메시지
       restored.push({ role: 'user', content: msg.inputText });
-      console.log('sessionId:', sessionId);
-      console.log('sessionMessages:', sessionMessages);
-
-      // AI 응답 복원
       const validation = msg.validations?.[0];
       if (!validation) continue;
-
       const result = adaptResponse(validation);
       if (result.success) {
         restored.push({ role: 'assistant', content: result.message, type: 'default' });
@@ -178,7 +195,6 @@ export default function App() {
         restored.push({ role: 'assistant', content: result.message, type: 'error' });
       }
     }
-
     setMessages(restored);
   };
 
@@ -221,7 +237,6 @@ export default function App() {
               onRetry={handleRetry}
             />
           )}
-
           <InputArea
             ref={inputAreaRef}
             onSend={handleSend}

@@ -5,7 +5,6 @@ import type {
   ExtractValidationError,
 } from '../types/api';
 
-// ── 백엔드 응답 타입 ──────────────────────────────────
 export interface BackendChatMessageResponse {
   messageId:   number;
   sessionId:   string;
@@ -15,7 +14,6 @@ export interface BackendChatMessageResponse {
   validations: BackendValidationResponse[];
 }
 
-// ── 백엔드 응답 → 프론트 타입 변환 (export) ───────────
 export function adaptResponse(backend: BackendValidationResponse): ExtractResponse {
   if (backend.validationStatus === 'AI_ERROR') {
       return { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' };
@@ -89,8 +87,14 @@ export async function fetchSessionMessages(sessionId: string): Promise<BackendCh
   }
 }
 
-// ── 메시지 전송 ───────────────────────────────────────
-export async function extractParams(inputText: string): Promise<ExtractResponse> {
+// ── 메시지 전송 → messageId 포함 반환 ────────────────
+export interface ExtractResult {
+  messageId: number;
+  validationId: number;
+  response: ExtractResponse;
+}
+
+export async function extractParams(inputText: string): Promise<ExtractResult> {
   try {
       const res = await fetch('/api/chat/messages', {
           method:  'POST',
@@ -99,16 +103,59 @@ export async function extractParams(inputText: string): Promise<ExtractResponse>
       });
 
       if (!res.ok) {
-          if (res.status >= 500) return { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' };
-          return { success: false, code: 'INVALID_JSON', message: '입력을 처리하지 못했습니다. 다시 입력해 주세요.', errors: [] };
+          if (res.status >= 500) return { messageId: -1, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
+          return { messageId: -1, validationId: -1, response: { success: false, code: 'INVALID_JSON', message: '입력을 처리하지 못했습니다. 다시 입력해 주세요.', errors: [] } };
       }
 
       const data: BackendChatMessageResponse = await res.json();
       const validation = data.validations?.[0];
-      if (!validation) return { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' };
+      if (!validation) return { messageId: data.messageId, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
 
-      return adaptResponse(validation);
+      return {
+          messageId:    data.messageId,
+          validationId: validation.validationId,
+          response:     adaptResponse(validation),
+      };
   } catch {
-      return { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' };
+      return { messageId: -1, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
+  }
+}
+
+// ── 재검증 (수정된 파라미터로 재분석) ────────────────
+export interface RevalidateResult {
+  validationId: number;
+  response: ExtractResponse;
+}
+
+export async function revalidateParams(
+  messageId: number,
+  values: Record<string, number>
+): Promise<RevalidateResult> {
+  try {
+      const parameters = Object.entries(values).map(([key, value]) => ({ key, value, unit: null }));
+      const res = await fetch(`/api/chat/messages/${messageId}/validations`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ parameters }),
+      });
+
+      if (!res.ok) return { validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
+
+      const data: BackendValidationResponse = await res.json();
+      return { validationId: data.validationId, response: adaptResponse(data) };
+  } catch {
+      return { validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' } };
+  }
+}
+
+// ── 분석 실행 확정 ────────────────────────────────────
+export async function confirmValidation(messageId: number, validationId: number): Promise<boolean> {
+  try {
+      const res = await fetch(`/api/chat/messages/${messageId}/validations/${validationId}/confirm`, {
+          method: 'POST',
+      });
+      return res.ok;
+  } catch {
+      return false;
   }
 }

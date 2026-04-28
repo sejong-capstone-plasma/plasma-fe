@@ -259,7 +259,7 @@ function ParamErrorCard({ data, onReanalyze }: { data: ExtractValidationError; o
           onMouseEnter={e => { if (allFilled) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
           onMouseLeave={e => { if (allFilled) e.currentTarget.style.backgroundColor = colors.primary[500]; }}
         >
-          재분석 실행
+          수정
         </button>
       </div>
     </div>
