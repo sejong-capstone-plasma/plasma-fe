@@ -30,11 +30,6 @@ interface SidebarProps {
 // ── 상수 ──────────────────────────────────────────────
 const BREAKPOINT = 1000;
 
-const TASK_LABEL: Record<AnalysisHistory['taskType'], string> = {
-  PREDICTION: '공정 조건 분석',
-  OPTIMIZATION: '공정 최적화',
-};
-
 // ── 아이콘 ─────────────────────────────────────────────
 const HamburgerIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"

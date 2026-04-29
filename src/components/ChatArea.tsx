@@ -19,7 +19,6 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
   const containerRef = useRef<HTMLDivElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const lastUserRef = useRef<HTMLDivElement | null>(null);
-  const [spacerHeight, setSpacerHeight] = useState(0);
 
   const lastUserIndex = messages.map(m => m.role).lastIndexOf('user');
   const hasAiAfterLastUser =
@@ -31,18 +30,7 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
     m.type === 'param-confirm' || m.type === 'param-error' ? i : last, -1
   );
 
-  useLayoutEffect(() => {
-    if (!hasAiAfterLastUser || !isTyping) {
-      setSpacerHeight(0);
-      return;
-    }
-    if (containerRef.current && lastUserRef.current) {
-      const containerH = containerRef.current.clientHeight;
-      const bubbleH = lastUserRef.current.offsetHeight;
-      setSpacerHeight(Math.max(0, containerH - bubbleH - 60));
-    }
-  }, [messages.length, isTyping, hasAiAfterLastUser]);
-
+  
   useLayoutEffect(() => {
     if (lastUserRef.current) {
       lastUserRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
