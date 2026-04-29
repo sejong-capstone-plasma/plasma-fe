@@ -12,12 +12,6 @@ interface ChatSession {
   messageCount: number;
 }
 
-interface AnalysisHistory {
-  id: string;
-  taskType: 'PREDICTION' | 'OPTIMIZATION';
-  summary: string;
-}
-
 interface SidebarProps {
   onNewChat: () => void;
   onSelectSession?: (sessionId: string) => void;

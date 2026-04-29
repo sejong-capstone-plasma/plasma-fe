@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import ChatTypes from './ChatTypes';
 
 interface ChatMessage {
@@ -21,10 +21,7 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
   const lastUserRef = useRef<HTMLDivElement | null>(null);
 
   const lastUserIndex = messages.map(m => m.role).lastIndexOf('user');
-  const hasAiAfterLastUser =
-    lastUserIndex !== -1 &&
-    messages.slice(lastUserIndex + 1).some(m => m.role === 'assistant');
-
+  
   // param-confirm / param-error 통합 — 마지막 인터랙티브 카드 인덱스
   const lastInteractiveIndex = messages.reduce((last, m, i) =>
     m.type === 'param-confirm' || m.type === 'param-error' ? i : last, -1
