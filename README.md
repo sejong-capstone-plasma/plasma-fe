@@ -1,73 +1,53 @@
-# React + TypeScript + Vite
+# Plasma AI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+대화형 AI 기반 반도체 플라즈마 Etch 공정 수율 예측 및 공정 의사결정 지원 플랫폼
 
-Currently, two official plugins are available:
+**배포 URL:** https://plasma-ai-gamma.vercel.app/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 프로젝트 개요
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+아르곤(Ar) 가스 기반 TCP(Planar ICP) + Bias Power 인가 장비 환경에서,  
+사용자가 자연어로 입력한 공정 조건을 AI가 해석하여 수율 예측 및 최적화 방향을 제안합니다.
 
-## Expanding the ESLint configuration
+## 기술 스택
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS
+- **배포:** Vercel
+- **백엔드 연동:** AWS EC2
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 입력 파라미터 허용 범위
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| 파라미터 | 범위 | 단위 |
+|---|---|---|
+| 압력 (Pressure) | 2 ~ 10 | mTorr |
+| 소스 파워 (Source Power) | 100 ~ 500 | W |
+| 바이어스 파워 (Bias Power) | 0 ~ 1000 | W |
+
+---
+
+## 입력 예시
+
+```
+압력 8mTorr, 소스 파워 450W, 바이어스 파워 80W 조건 분석해줘
+압력 8mTorr, 소스 파워 450W, 바이어스 파워 80W에서 Etch Rate 높이는 방향으로 최적화해줘
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 로컬 실행
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+---
+
+## 주의사항
+
+Etch Score는 ion_flux · ion_energy 기반 상대 지표이며, 실제 Etch Rate와 다를 수 있습니다.  
+중요한 공정 결정은 엔지니어의 검토가 필요합니다.
