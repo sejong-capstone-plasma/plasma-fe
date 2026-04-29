@@ -11,14 +11,14 @@ interface ChatMessage {
 export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, onRetry, onOpenPanel }: {
   messages: ChatMessage[];
   isTyping: boolean;
-  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION') => void;
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION', params?: Record<string, number>) => void;
   onReanalyze?: (values: Record<string, number>) => void;
   onRetry?: () => void;
   onOpenPanel?: (historyId: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const endRef       = useRef<HTMLDivElement | null>(null);
-  const lastUserRef  = useRef<HTMLDivElement | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
+  const lastUserRef = useRef<HTMLDivElement | null>(null);
   const [spacerHeight, setSpacerHeight] = useState(0);
 
   const lastUserIndex = messages.map(m => m.role).lastIndexOf('user');
@@ -38,7 +38,7 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
     }
     if (containerRef.current && lastUserRef.current) {
       const containerH = containerRef.current.clientHeight;
-      const bubbleH    = lastUserRef.current.offsetHeight;
+      const bubbleH = lastUserRef.current.offsetHeight;
       setSpacerHeight(Math.max(0, containerH - bubbleH - 60));
     }
   }, [messages.length, isTyping, hasAiAfterLastUser]);
@@ -64,6 +64,8 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
               ? index === lastInteractiveIndex
               : true;
 
+          const hasPredictionResult = messages.some(m => m.type === 'prediction-result'); 
+
           return (
             <div key={index}>
               <div ref={index === lastUserIndex ? lastUserRef : undefined}>
@@ -79,6 +81,7 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
                   onRetry={msg.type === 'error-retry' ? onRetry : undefined}
                   loadingText={msg.loadingText}
                   onOpenPanel={msg.type === 'prediction-result' ? onOpenPanel : undefined}
+                  disableEdit={msg.type === 'param-confirm' && hasPredictionResult}
                 />
               </div>
             </div>

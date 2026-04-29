@@ -9,11 +9,12 @@ interface ChatProps {
   isLastAssistant?: boolean;
   isLatest?: boolean;
   type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result';
-  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION') => void;
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION', params?: Record<string, number>) => void;
   onReanalyze?: (values: Record<string, number>) => void;
   onRetry?: () => void;
   loadingText?: string;
   onOpenPanel?: (historyId: string) => void;
+  disableEdit?: boolean;
 }
 
 // ── 마크다운 굵기 파싱 ──────────────────────────────────
@@ -45,17 +46,18 @@ const PARAM_UNIT: Record<string, string> = {
 };
 
 const PARAM_RANGE: Record<string, string> = {
-  pressure:     '2 ~ 10 mTorr',
+  pressure: '2 ~ 10 mTorr',
   source_power: '100 ~ 500 W',
-  bias_power:   '0 ~ 1500 W',
+  bias_power: '0 ~ 1000 W',
 };
 
 type ParamMap = Record<string, { value: number; unit: string; status: 'VALID' }>;
 
-function ParamConfirmCard({ data, onConfirm, isLatest }: {
+function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
   data: ExtractSuccessResponse;
-  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION') => void;
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION', params?: Record<string, number>) => void;
   isLatest?: boolean;
+  disableEdit?: boolean;
 }) {
   const [params, setParams] = useState<ParamMap>(
     data.process_params as unknown as ParamMap
@@ -137,7 +139,7 @@ function ParamConfirmCard({ data, onConfirm, isLatest }: {
                   {field.value}{' '}
                   <span style={{ color: colors.slate[400], fontWeight: typography.weight.regular }}>{field.unit}</span>
                 </span>
-                {isLatest && (
+                {isLatest && !disableEdit && (
                   <button onClick={() => startEdit(key, field.value)} title="수정"
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: colors.slate[400], borderRadius: '4px', transition: 'color 0.15s' }}
                     onMouseEnter={e => (e.currentTarget.style.color = colors.slate[700])}
@@ -156,7 +158,12 @@ function ParamConfirmCard({ data, onConfirm, isLatest }: {
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '10px', borderTop: `1px solid ${colors.slate[200]}` }}>
         <button
-          onClick={() => onConfirm?.('PREDICTION')}
+          onClick={() => {
+            const currentValues = Object.fromEntries(
+              entries.map(([k, v]) => [k, v.value])
+            );
+            onConfirm?.('PREDICTION', currentValues);
+          }}
           disabled={!isLatest}
           style={{
             fontSize: typography.size.xs, fontWeight: typography.weight.medium,
@@ -171,7 +178,12 @@ function ParamConfirmCard({ data, onConfirm, isLatest }: {
           예측
         </button>
         <button
-          onClick={() => onConfirm?.('OPTIMIZATION')}
+          onClick={() => {
+            const currentValues = Object.fromEntries(
+              entries.map(([k, v]) => [k, v.value])
+            );
+            onConfirm?.('OPTIMIZATION', currentValues);
+          }}
           disabled={!isLatest}
           style={{
             fontSize: typography.size.xs, fontWeight: typography.weight.medium,
@@ -218,7 +230,30 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
     onReanalyze?.(parsed);
   };
 
-  const allFilled = isLatest && reenterFields.every(f => inputValues[f].trim() !== '' && !isNaN(parseFloat(inputValues[f])));
+  const PARAM_MIN: Record<string, number> = {
+    pressure: 2,
+    source_power: 100,
+    bias_power: 0,
+  };
+  const PARAM_MAX: Record<string, number> = {
+    pressure: 10,
+    source_power: 500,
+    bias_power: 1000,
+  };
+
+  const isInRange = (f: string, val: string) => {
+    const v = parseFloat(val);
+    if (isNaN(v)) return false;
+    const min = PARAM_MIN[f];
+    const max = PARAM_MAX[f];
+    if (min !== undefined && v < min) return false;
+    if (max !== undefined && v > max) return false;
+    return true;
+  };
+
+  const allFilled = isLatest && reenterFields.every(f =>
+    inputValues[f].trim() !== '' && isInRange(f, inputValues[f])
+  );
 
   return (
     <div style={{
@@ -258,7 +293,12 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
               placeholder={PARAM_RANGE[f] ?? `수치 입력 (${PARAM_UNIT[f] ?? ''})`}
               value={inputValues[f]}
               disabled={!isLatest}
-              onChange={e => setInputValues(prev => ({ ...prev, [f]: e.target.value }))}
+              onChange={e => {
+                setInputValues(prev => ({ ...prev, [f]: e.target.value }));
+                e.currentTarget.style.borderColor = isInRange(f, e.target.value)
+                  ? colors.slate[300]
+                  : colors.semantic.error;
+              }}
               onKeyDown={e => { if (e.key === 'Enter' && allFilled) handleReanalyze(); }}
               style={{
                 flex: 1,
@@ -272,8 +312,16 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
                 transition: 'border-color 0.15s',
                 cursor: isLatest ? 'text' : 'default',
               }}
-              onFocus={e => { if (isLatest) e.currentTarget.style.borderColor = colors.primary[400]; }}
-              onBlur={e => (e.currentTarget.style.borderColor = colors.slate[300])}
+              onFocus={e => {
+                if (isLatest) e.currentTarget.style.borderColor = isInRange(f, inputValues[f])
+                  ? colors.primary[400]
+                  : colors.semantic.error;
+              }}
+              onBlur={e => {
+                e.currentTarget.style.borderColor = inputValues[f] && !isInRange(f, inputValues[f])
+                  ? colors.semantic.error
+                  : colors.slate[300];
+              }}
             />
             <span style={{ fontSize: typography.size.xs, color: colors.slate[400], flexShrink: 0 }}>
               {PARAM_UNIT[f] ?? ''}
@@ -308,7 +356,7 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────
-export default function ChatTypes({ role, content, isTyping, isLastAssistant, isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText, onOpenPanel }: ChatProps) {
+export default function ChatTypes({ role, content, isTyping, isLastAssistant, isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText, disableEdit, onOpenPanel }: ChatProps) {
   const isUser = role === 'user';
   const isWaiting = isTyping && content === '';
   const isResponding = isTyping && content !== '';
@@ -318,7 +366,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
     if (type === 'param-confirm') {
       try {
         const data = JSON.parse(content) as ExtractSuccessResponse;
-        return <ParamConfirmCard data={data} onConfirm={onConfirm} isLatest={isLatest} />;
+        return <ParamConfirmCard data={data} onConfirm={onConfirm} isLatest={isLatest} disableEdit={disableEdit} />;
       } catch {
         return <span style={{ color: colors.semantic.error }}>파라미터 파싱 오류</span>;
       }
@@ -336,7 +384,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
         const { historyId, etch_score, label } = JSON.parse(content);
         return (
           <div style={{
-            border: `1.5px solid ${colors.slate[200]}`,
+            border: `1px solid ${colors.slate[300]}`,
             borderRadius: '10px',
             padding: '12px 14px',
             backgroundColor: colors.surface.card,
@@ -347,7 +395,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
             justifyContent: 'space-between',
             gap: '12px',
           }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <span style={{
                 fontSize: typography.size.xs, fontWeight: typography.weight.medium,
                 color: colors.primary[600], backgroundColor: colors.primary[50],
@@ -429,7 +477,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
   };
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 w-full`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-1 w-full`}>
       <style>{`
         @keyframes breathe {
           0%, 100% { transform: scale(1);    opacity: 0.75; }

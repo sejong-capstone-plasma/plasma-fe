@@ -25,6 +25,8 @@ export interface BackendValidationResponse {
   currentEr:        BackendParamField | null;
   allValid:         boolean;
   confirmed:        boolean;
+  prediction:       PredictionResult | null;
+  predictionError:  string | null;
   failureReason:    string | null;
   createdAt:        string;
 }

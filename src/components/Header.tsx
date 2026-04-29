@@ -3,7 +3,11 @@ import { colors, typography } from '../styles/tokens';
 
 const BREAKPOINT = 1000;
 
-export default function Header() {
+interface HeaderProps {
+    onReset?: () => void;
+}
+
+export default function Header({ onReset }: HeaderProps) {
     const [isNarrow, setIsNarrow] = useState(window.innerWidth < BREAKPOINT);
 
     useEffect(() => {
@@ -24,13 +28,16 @@ export default function Header() {
         }}>
             {/* 로고 + 플랫폼명 */}
             <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{
-                    padding: '3px 0px 0px 6px',
-                    fontSize: typography.size.ti,
-                    fontWeight: typography.weight.regular,
-                    color: colors.slate[500],
-                    letterSpacing: '-0.01em',
-                }}>
+                <span
+                    onClick={onReset}
+                    style={{
+                        cursor: 'pointer',
+                        padding: '3px 0px 0px 6px',
+                        fontSize: typography.size.ti,
+                        fontWeight: typography.weight.regular,
+                        color: colors.slate[500],
+                        letterSpacing: '-0.01em',
+                    }}>
                     Plasma AI
                 </span>
             </div>

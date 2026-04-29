@@ -23,13 +23,15 @@ interface SidebarProps {
   onSelectSession?: (sessionId: string) => void;
   predictionHistory?: PredictionHistoryItem[];
   onSelectHistory?: (item: PredictionHistoryItem) => void;
+  activeSessionId?: string;
+  sessionRefreshTrigger?: number;
 }
 
 // ── 상수 ──────────────────────────────────────────────
 const BREAKPOINT = 1000;
 
 const TASK_LABEL: Record<AnalysisHistory['taskType'], string> = {
-  PREDICTION:   '공정 조건 분석',
+  PREDICTION: '공정 조건 분석',
   OPTIMIZATION: '공정 최적화',
 };
 
@@ -164,12 +166,13 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
 );
 
 // ── 메인 컴포넌트 ──────────────────────────────────────
-export default function Sidebar({ onNewChat, onSelectSession, predictionHistory = [], onSelectHistory }: SidebarProps) {
-  const [isOpen, setIsOpen]     = useState(false);
+export default function Sidebar({ onNewChat, onSelectSession, predictionHistory = [], 
+  onSelectHistory, activeSessionId, sessionRefreshTrigger }: SidebarProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [tab, setTab]           = useState<'chat' | 'history'>('chat');
+  const [tab, setTab] = useState<'chat' | 'history'>('chat');
   const [isOverlay, setIsOverlay] = useState(window.innerWidth < BREAKPOINT);
-  const [sessions, setSessions]   = useState<ChatSession[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
   // 창 크기 감지
@@ -191,7 +194,11 @@ export default function Sidebar({ onNewChat, onSelectSession, predictionHistory 
       setSessions(data);
       setSessionsLoading(false);
     });
-  }, [isOpen, tab, isOverlay]);
+  }, [isOpen, tab, isOverlay, sessionRefreshTrigger]);
+
+  useEffect(() => {
+    if (activeSessionId) setActiveId(activeSessionId);
+  }, [activeSessionId]);
 
   // 새 채팅 후 목록 갱신
   const handleNewChat = () => {

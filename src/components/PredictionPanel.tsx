@@ -112,6 +112,7 @@ export default function PredictionPanel({ isOpen, onClose, data, processParams }
         animation: 'overlayIn 0.18s ease forwards',
       }}
     >
+        
       <style>{`
         @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes panelIn {
