@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import ChatTypes from './ChatTypes';
+import ChatTypes from './chatTypes';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
