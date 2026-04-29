@@ -384,7 +384,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
         const { historyId, etch_score, label } = JSON.parse(content);
         return (
           <div style={{
-            border: `1px solid ${colors.slate[300]}`,
+            border: `1.5px solid ${colors.slate[200]}`,
             borderRadius: '10px',
             padding: '12px 14px',
             backgroundColor: colors.surface.card,
