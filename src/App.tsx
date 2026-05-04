@@ -130,8 +130,12 @@ export default function App() {
     const ctrl = new AbortController();
     abortCtrlRef.current = ctrl;
 
-    setMessages(prev => [...prev, { role: 'user', content }]);
-    setMessages(prev => [...prev, { role: 'assistant', content: '', type: 'default' }]);
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content },
+      { role: 'assistant', content: '', type: 'default' },
+    ]);
+    
     setIsTyping(true);
 
     const [{ messageId, validationId, response: result, allParams }] = await Promise.all([
@@ -419,7 +423,7 @@ export default function App() {
           sessionRefreshTrigger={sessionRefreshTrigger}
         />
 
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: colors.slate[50] }}>
           <Header onReset={() => {
             setMessages([]);
             hasWelcomed.current = false;
@@ -429,7 +433,7 @@ export default function App() {
             setActiveSessionId(getCurrentSessionId());
           }}
           />
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: colors.slate[50] }}>
             {messages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-8">
                 <h1

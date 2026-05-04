@@ -84,7 +84,7 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
 
   return (
     <div style={{
-      border: `1.5px solid ${colors.slate[200]}`,
+      border: `0.5px solid ${colors.slate[300]}`,
       borderRadius: '10px',
       padding: '12px 14px',
       backgroundColor: colors.surface.card,
@@ -257,7 +257,7 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
 
   return (
     <div style={{
-      border: `1.5px solid ${colors.slate[200]}`,
+      border: `0.5px solid ${colors.slate[300]}`,
       borderRadius: '10px',
       padding: '12px 14px',
       backgroundColor: colors.surface.card,
@@ -384,7 +384,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
         const { historyId, etch_score, label } = JSON.parse(content);
         return (
           <div style={{
-            border: `1.5px solid ${colors.slate[200]}`,
+            border: `0.5px solid ${colors.slate[300]}`,
             borderRadius: '10px',
             padding: '12px 14px',
             backgroundColor: colors.surface.card,
@@ -496,27 +496,17 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
         {renderBody()}
 
         {!isUser && isLastAssistant && (
-          <div style={{ display: 'flex', alignItems: 'center', marginTop: '12px' }}>
-            {!isWaiting && !isResponding && (
-              <div style={{ width: '16px', height: '16px', backgroundColor: colors.primary[500], borderRadius: '6px' }} />
-            )}
+          <div 
+          style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
             {isWaiting && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '16px', height: '16px', backgroundColor: colors.primary[500], borderRadius: '6px', animation: 'breathe 1.8s ease-in-out infinite', flexShrink: 0 }} />
+                <div style={{ width: '16px', height: '16px', backgroundColor: colors.primary[500], borderRadius: '10px', animation: 'breathe 1.8s ease-in-out infinite', flexShrink: 0 }} />
                 {loadingText && (
                   <span style={{ fontSize: typography.size.sm, color: colors.slate[400] }}>
                     {loadingText}
                   </span>
                 )}
               </div>
-            )}
-            {isResponding && (
-              <svg width="16" height="16" viewBox="0 0 16 16" style={{ display: 'block', overflow: 'visible' }}>
-                <rect x="0" y="0" width="16" height="16" rx="5" fill={colors.primary[500]} opacity="0.18" />
-                <rect x="1" y="1" width="14" height="14" rx="6" fill="none" stroke={colors.primary[500]} strokeWidth="1.5"
-                  strokeDasharray={`${PERIMETER * 0.35} ${PERIMETER * 0.65}`}
-                  style={{ animation: 'spinBorder 1s linear infinite' }} />
-              </svg>
             )}
           </div>
         )}

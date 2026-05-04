@@ -52,22 +52,23 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
     const buttonActive = isTyping || canSend;
 
     return (
-      <div className="pb-3 px-6">
+      <div className="pb-3 px-5">
         <div className="max-w-3xl mx-auto">
           <div
-            className="relative flex flex-col rounded-[18px] overflow-hidden"
+            className="relative flex flex-col rounded-[24px] overflow-hidden"
             style={{
               backgroundColor: colors.surface.card,
-              border: `1px solid ${colors.slate[300]}`,
-              boxShadow: '0 4px 5px rgba(0,0,0,0.08)',
+              border: `0.5px solid ${colors.slate[300]}`,
+              boxShadow: '0 3px 5px rgba(0,0,0,0.05)',
             }}
           >
             <textarea
               ref={textareaRef}
               onFocus={onFirstFocus}
               maxLength={500}
-              className="w-full bg-transparent px-6 pt-4 resize-none focus:outline-none placeholder:text-slate-400 overflow-y-auto"
-              style={{ fontSize: typography.size.md, minHeight: '24px', maxHeight: '200px' }}
+              rows={1}
+              className="w-full bg-transparent py-2 px-5 pt-4 resize-none focus:outline-none placeholder:text-slate-400 overflow-y-auto"
+              style={{ fontSize: typography.size.md, minHeight:'24px', maxHeight: '200px' }}
               placeholder="압력, 소스 파워, 바이어스 파워 조건을 입력하고 분석 또는 최적화를 요청해 보세요."
               value={text}
               onChange={handleChange}
@@ -79,15 +80,16 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
                 }
               }}
             />
-            <div className="flex justify-end items-center px-3 pb-3">
-              <button
+            
+            <div className="flex justify-end items-center px-3.5 pb-3.5">
+              <button 
                 onClick={handleButtonClick}
                 disabled={!buttonActive}
                 style={{
-                  backgroundColor: isTyping ? '#FFFFFF' : '#FFFFFF',
-                  borderRadius: isTyping ? '8px' : '30%',
+                  backgroundColor: isTyping ? '#FFFFFF' : colors.primary[500],
+                  borderRadius: '10px',
                   padding: '8px',
-                  boxShadow: buttonActive ? '0 0 3px rgba(0,0,0,0.15)' : 'none',
+                  border: `1px solid ${colors.slate[300]}`,
                   transition: 'all 0.2s ease',
                   cursor: buttonActive ? 'pointer' : 'default',
                   opacity: buttonActive ? 1 : 0.45,
@@ -109,10 +111,10 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
                 ) : (
                   // 전송 아이콘 
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
-                    stroke={canSend ? colors.primary[500] : colors.slate[400]}
-                    strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                    stroke={canSend ? colors.slate[50] : colors.slate[400]}
+                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="19" x2="12" y2="5" />
-                    <polyline points="5 12 12 5 19 12" />
+                    <polyline points="6 10 12 5 18 10" />
                   </svg>
                 )}
               </button>

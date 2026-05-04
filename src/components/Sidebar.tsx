@@ -53,7 +53,7 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
     {/* 탭 헤더 */}
     <div style={{
       display: 'flex',
-      borderBottom: `1px solid ${colors.slate[200]}`,
+      borderBottom: `1px solid ${colors.slate[300]}`,
       margin: '30px 16px 0',
       flexShrink: 0,
     }}>
@@ -238,12 +238,12 @@ export default function Sidebar({ onNewChat, onSelectSession, predictionHistory 
 
         <div style={{
           position: 'fixed', top: 0, left: 0, zIndex: 50,
-          width: '75vw', maxWidth: '270px', height: '100vh',
+          width: '75vw', maxWidth: '290px', height: '100vh',
           backgroundColor: colors.slate[50], borderRight: `1px solid ${colors.slate[200]}`,
           display: 'flex', flexDirection: 'column',
           transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease',
-          borderTopRightRadius: '8px', borderBottomRightRadius: '8px',
+          
         }}>
           <div style={{ display: 'flex', alignItems: 'center', padding: '12px 12px' }}>
             <div
@@ -286,7 +286,7 @@ export default function Sidebar({ onNewChat, onSelectSession, predictionHistory 
       maxWidth: isOpen ? '270px' : '53px',
       height: '100vh',
       backgroundColor: colors.slate[50],
-      borderRight: `1px solid ${colors.slate[200]}`,
+      borderRight: `0.5px solid ${colors.slate[300]}`,
       display: 'flex', flexDirection: 'column',
       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       overflow: 'hidden', flexShrink: 0,
