@@ -359,7 +359,6 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
 export default function ChatTypes({ role, content, isTyping, isLastAssistant, isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText, disableEdit, onOpenPanel }: ChatProps) {
   const isUser = role === 'user';
   const isWaiting = isTyping && content === '';
-  const isResponding = isTyping && content !== '';
   const PERIMETER = 56;
 
   const renderBody = () => {
