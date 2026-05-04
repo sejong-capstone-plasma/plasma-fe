@@ -102,5 +102,9 @@ export interface PredictionResult {
 export interface ConfirmResponse {
   validation:      BackendValidationResponse;
   prediction:      PredictionResult | null;
+  optimization:    unknown | null;   
+  comparison:      unknown | null;
+  question:        unknown | null;
+  executionError:  string | null;
   predictionError: string | null;
 }

@@ -219,7 +219,7 @@ export default function App() {
     }]);
     setIsTyping(true);
 
-    const confirmRes = await confirmValidation(mId, currentValidationId.current);
+    const confirmRes = await confirmValidation(mId, currentValidationId.current, taskType);
 
     setMessages(prev => prev.filter(m => m.loadingText !== '예측 분석을 실행하고 있습니다...'));
     setIsTyping(false);
