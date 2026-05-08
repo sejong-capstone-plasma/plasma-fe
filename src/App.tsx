@@ -65,7 +65,7 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [activePanelType, setActivePanelType] = useState<'prediction' | 'optimization' | null>(null);
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null);
-  const [optimizationData, setOptimizationData] = useState<OptimizationResult | null>(null);
+  const [optimizationData] = useState<OptimizationResult | null>(null);
   const [processParams, setProcessParams] = useState<ProcessParams | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryItem[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(getCurrentSessionId());

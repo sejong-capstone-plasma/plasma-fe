@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { colors, typography } from '../styles/tokens';
-import type { OptimizationResult, OptimizationCandidate } from '../types/api';
+import type { OptimizationResult } from '../types/api';
 
 Chart.register(...registerables);
 

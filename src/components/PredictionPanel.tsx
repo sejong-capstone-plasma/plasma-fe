@@ -18,20 +18,6 @@ interface PredictionPanelProps {
   processParams: ProcessParams | null;
 }
 
-const RANGES = {
-  pressure: { min: 2, max: 10 },
-  source_power: { min: 100, max: 500 },
-  bias_power: { min: 0, max: 1500 },
-};
-
-function isInRange(p: ProcessParams): boolean {
-  return (
-    p.pressure >= RANGES.pressure.min && p.pressure <= RANGES.pressure.max &&
-    p.source_power >= RANGES.source_power.min && p.source_power <= RANGES.source_power.max &&
-    p.bias_power >= RANGES.bias_power.min && p.bias_power <= RANGES.bias_power.max
-  );
-}
-
 const RADIUS = 50;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -91,8 +77,7 @@ const rowCard: React.CSSProperties = {
 };
 
 // ── 그래프 카드 컴포넌트 ──────────────────────────────
-function GraphCard({ id, title, sub, data, color, xlabel, ylabel, panelWidth }: {
-  id: string;
+function GraphCard({ title, sub, data, color, xlabel, ylabel, panelWidth }: {
   title: string;
   sub: string;
   data: { x: number; y: number }[];
