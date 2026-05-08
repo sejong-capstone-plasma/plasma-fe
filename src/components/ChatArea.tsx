@@ -4,7 +4,7 @@ import ChatTypes from './chatTypes';
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result';
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result' | 'optimization-result';
   loadingText?: string;
 }
 
@@ -68,7 +68,7 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
                   onReanalyze={msg.type === 'param-error' ? onReanalyze : undefined}
                   onRetry={msg.type === 'error-retry' ? onRetry : undefined}
                   loadingText={msg.loadingText}
-                  onOpenPanel={msg.type === 'prediction-result' ? onOpenPanel : undefined}
+                  onOpenPanel={(msg.type === 'prediction-result' || msg.type === 'optimization-result') ? onOpenPanel : undefined}
                   disableEdit={msg.type === 'param-confirm' && hasPredictionResult}
                 />
               </div>

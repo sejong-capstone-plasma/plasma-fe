@@ -8,7 +8,7 @@ interface ChatProps {
   isTyping?: boolean;
   isLastAssistant?: boolean;
   isLatest?: boolean;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result';
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result' | 'optimization-result';
   onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION', params?: Record<string, number>) => void;
   onReanalyze?: (values: Record<string, number>) => void;
   onRetry?: () => void;
@@ -214,7 +214,7 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
   onReanalyze?: (values: Record<string, number>) => void;
   isLatest?: boolean;
 }) {
-  const reenterFields = [...data.missing_fields, ...data.ambiguous_fields];
+  const reenterFields = [...data.missing_fields, ...data.ambiguous_fields, ...data.out_of_range_fields];
   const [inputValues, setInputValues] = useState<Record<string, string>>(
     Object.fromEntries(reenterFields.map(f => [f, '']))
   );
@@ -428,6 +428,46 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
       } catch {
         return null;
       }
+    }
+    if (type === 'optimization-result') {
+      return (
+        <div style={{
+          border: `0.5px solid ${colors.slate[300]}`,
+          borderRadius: '10px',
+          padding: '12px 14px',
+          backgroundColor: colors.surface.card,
+          maxWidth: '400px',
+          minWidth: '280px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{
+              fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+              color: colors.primary[600], backgroundColor: colors.primary[50],
+              padding: '2px 8px', borderRadius: '4px', border: `1px solid ${colors.primary[100]}`,
+              alignSelf: 'flex-start',
+            }}>
+              최적화 완료
+            </span>
+          </div>
+          <button
+            onClick={() => onOpenPanel?.('optimization')}
+            style={{
+              fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+              color: colors.surface.white, backgroundColor: colors.primary[500],
+              border: 'none', borderRadius: '6px', padding: '6px 14px',
+              cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = colors.primary[600])}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = colors.primary[500])}
+          >
+            결과 보기
+          </button>
+        </div>
+      );
     }
     if (type === 'error') {
       return (

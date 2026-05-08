@@ -20,28 +20,10 @@
         opacity: 0; 
         transform: translateY(-8px); 
     }
-    
-  }
-  textarea::-webkit-scrollbar {
-    width: 4px;
-  }
-  
-  textarea::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  textarea::-webkit-scrollbar-thumb {
-    background: #cbd5e1;  /* slate-300 */
-    border-radius: 999px;
-  }
-  
-  textarea::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;  /* slate-400 */
   }
 
-  /* 채팅 영역 스크롤바 */
 .overflow-y-auto::-webkit-scrollbar {
-  width: 10px;
+  width: 9px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
@@ -49,10 +31,26 @@
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d6dfea;
   border-radius: 999px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #aebdd0;
+}
+
+/* PredictionPanel container query */
+.prediction-panel-inner {
+  container-type: inline-size;
+  container-name: predpanel;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+@container predpanel (max-width: 420px) {
+  .pp-summary-grid { flex-direction: column !important; }
+  .pp-divider { display: none !important; }
+  .pp-gauge-section { border-top: 0.5px solid #e2e8f0; }
 }

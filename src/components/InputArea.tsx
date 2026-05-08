@@ -69,7 +69,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
               rows={1}
               className="w-full bg-transparent py-2 px-5 pt-4 resize-none focus:outline-none placeholder:text-slate-400 overflow-y-auto"
               style={{ fontSize: typography.size.md, minHeight:'24px', maxHeight: '200px' }}
-              placeholder="압력, 소스 파워, 바이어스 파워 조건을 입력하고 분석 또는 최적화를 요청해 보세요."
+              placeholder="분석하고 싶은 조건을 입력해 보세요..."
               value={text}
               onChange={handleChange}
               onKeyDown={(e) => {

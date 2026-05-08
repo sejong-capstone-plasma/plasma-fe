@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import PredictionPanel from './components/PredictionPanel';
+import OptimizationPanel from './components/OptimizationPanel';
 import ChatArea from './components/ChatArea';
 import Header from './components/Header';
 import InputArea, { type InputAreaHandle } from './components/InputArea';
@@ -11,7 +12,7 @@ import {
   getCurrentSessionId
 } from './api/analysis';
 import { colors, typography } from './styles/tokens';
-import type { ExtractValidationError, PredictionResult } from './types/api';
+import type { ExtractValidationError, PredictionResult, OptimizationResult } from './types/api';
 
 interface ProcessParams {
   pressure: number;
@@ -30,7 +31,7 @@ export interface PredictionHistoryItem {
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result';
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result' | 'optimization-result';
   loadingText?: string;
 }
 
@@ -38,16 +39,15 @@ const WELCOME_MESSAGE =
   `안녕하세요. 플라즈마 Etch 공정 분석 AI입니다.
 
 본 시스템은 **아르곤(Ar) 가스 기반 TCP(Planar ICP) + Bias Power** 인가 장비 환경에서
-공정 조건을 분석하고 최적화 방향을 제안합니다.
+**압력 (mTorr)**, **소스 파워 (W)**, **바이어스 파워 (W)** 조건을 학습한 모델입니다.
 
-분석을 위해 아래 3가지 조건을 필수로 입력해 주세요:
-  · **압력 (단위: mTorr)**   
-  · **소스 파워 (단위: W)**         
-  · **바이어스 파워 (단위: W)**
-     
-아래 형식을 참고해서 입력해 주세요:
+조건을 일부만 알고 있어도 괜찮습니다. 공정에 대해 궁금한 점이 있다면 자유롭게 질문하세요.
+
+아래 형식을 참고하여 입력해 주세요:
   · "압력 8mTorr, 소스 파워 450W, 바이어스 파워 80W 조건 분석해줘"
-  · "압력 8mTorr, 소스 파워 450W, 바이어스 파워 80W에서 Etch Rate 높이는 방향으로 최적화해줘"`;
+  · "압력 8mTorr, 소스 파워 450W, 바이어스 파워 80W에서 Etch Rate 높이는 방향으로 최적화해줘"
+  · "압력 8mTorr 조건이랑 압력 10mTorr 조건 비교해줘"
+  · "ion flux가 뭐야?"`;
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -59,17 +59,20 @@ export default function App() {
 
   const currentMessageId = useRef<number>(-1);
   const currentValidationId = useRef<number>(-1);
-  // 이전 추출 단계에서 value가 존재했던 파라미터 전체 보관
   const lastKnownParams = useRef<Record<string, number>>({});
 
   const [isFocused, setIsFocused] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [activePanelType, setActivePanelType] = useState<'prediction' | 'optimization' | null>(null);
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null);
+  const [optimizationData, setOptimizationData] = useState<OptimizationResult | null>(null);
   const [processParams, setProcessParams] = useState<ProcessParams | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryItem[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(getCurrentSessionId());
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
+
+  const isPredictionPanelOpen = activePanelType === 'prediction';
+  const isOptPanelOpen = activePanelType === 'optimization';
 
   // ── 말풍선 타이핑 효과 ──────────────────────────────
   const typeMessage = (text: string, speed = 18): Promise<void> => {
@@ -135,7 +138,7 @@ export default function App() {
       { role: 'user', content },
       { role: 'assistant', content: '', type: 'default' },
     ]);
-    
+
     setIsTyping(true);
 
     const [{ messageId, validationId, response: result, allParams }] = await Promise.all([
@@ -147,7 +150,6 @@ export default function App() {
       setActiveSessionId(getCurrentSessionId());
     }
 
-    // 취소된 경우
     if (!result.success && 'message' in result && result.message === '__CANCELLED__') {
       isSending.current = false;
       return;
@@ -189,11 +191,6 @@ export default function App() {
     const vId = currentValidationId.current;
     if (mId === -1 || vId === -1) return;
 
-    if (taskType === 'OPTIMIZATION') {
-      console.log('최적화 요청 — 파이프라인 준비 중');
-      return;
-    }
-
     if (currentParams) {
       const needsRevalidation = Object.entries(currentParams).some(
         ([k, v]) => lastKnownParams.current[k] !== v
@@ -213,21 +210,33 @@ export default function App() {
       }
     }
 
+    const loadingText = taskType === 'OPTIMIZATION'
+      ? '최적화 분석을 실행하고 있습니다...'
+      : '예측 분석을 실행하고 있습니다...';
+
     setMessages(prev => [...prev, {
-      role: 'assistant', content: '', type: 'default',
-      loadingText: '예측 분석을 실행하고 있습니다...',
+      role: 'assistant', content: '', type: 'default', loadingText,
     }]);
     setIsTyping(true);
 
     const confirmRes = await confirmValidation(mId, currentValidationId.current, taskType);
 
-    setMessages(prev => prev.filter(m => m.loadingText !== '예측 분석을 실행하고 있습니다...'));
+    setMessages(prev => prev.filter(m => m.loadingText !== loadingText));
     setIsTyping(false);
 
     if (!confirmRes) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        content: `${taskType === 'OPTIMIZATION' ? '최적화' : '예측'} 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.`,
+        type: 'error-retry',
+      }]);
+      return;
+    }
+
+    if (confirmRes.executionError) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `${taskType === 'OPTIMIZATION' ? '최적화' : '예측'} 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.`,
         type: 'error-retry',
       }]);
       return;
@@ -241,6 +250,17 @@ export default function App() {
       }]);
       return;
     }
+
+    if (taskType === 'OPTIMIZATION') {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '최적화 분석이 완료되었습니다.',
+        type: 'optimization-result',
+      }]);
+      setActivePanelType('optimization');
+      return;
+    }
+
 
     if (confirmRes.prediction) {
       const pred = confirmRes.prediction;
@@ -273,9 +293,17 @@ export default function App() {
 
       setPredictionData(pred);
       if (params) setProcessParams(params);
-      setIsPanelOpen(true);
+      setActivePanelType('prediction');
+    } 
+    else {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        type: 'error-retry',
+      }]);
     }
   };
+
 
   // ── 재검증 ────────────────────────────────────────────
   const handleReanalyze = async (values: Record<string, number>) => {
@@ -285,8 +313,6 @@ export default function App() {
     const ctrl = new AbortController();
     abortCtrlRef.current = ctrl;
 
-    // 이전 추출에서 얻은 VALID 파라미터 + 사용자가 수정 입력한 값 병합
-    // values가 lastKnownParams를 덮어쓰므로 사용자 입력이 우선 적용됨
     const mergedValues = { ...lastKnownParams.current, ...values };
 
     setMessages(prev => [...prev, { role: 'assistant', content: '', type: 'default' }]);
@@ -302,6 +328,7 @@ export default function App() {
     }
 
     currentValidationId.current = validationId;
+    lastKnownParams.current = mergedValues;
 
     if (result.success) {
       await typeMessage(result.message);
@@ -393,7 +420,6 @@ export default function App() {
             type: 'prediction-result',
           });
         }
-
       }
     }
     setPredictionHistory(restoredHistory);
@@ -409,7 +435,7 @@ export default function App() {
           onSelectHistory={(item) => {
             setPredictionData(item.predictionData);
             setProcessParams(item.processParams);
-            setIsPanelOpen(true);
+            setActivePanelType('prediction');
           }}
           onNewChat={() => {
             setMessages([]);
@@ -457,11 +483,15 @@ export default function App() {
                 onReanalyze={handleReanalyze}
                 onRetry={handleRetry}
                 onOpenPanel={(historyId) => {
+                  if (historyId === 'optimization') {
+                    setActivePanelType('optimization');
+                    return;
+                  }
                   const item = predictionHistory.find(h => h.id === historyId);
                   if (item) {
                     setPredictionData(item.predictionData);
                     setProcessParams(item.processParams);
-                    setIsPanelOpen(true);
+                    setActivePanelType('prediction');
                   }
                 }}
               />
@@ -475,14 +505,19 @@ export default function App() {
             />
           </div>
         </div>
-      </div>
 
-      <PredictionPanel
-        isOpen={isPanelOpen}
-        onClose={() => setIsPanelOpen(false)}
-        data={predictionData}
-        processParams={processParams}
-      />
+        <PredictionPanel
+          isOpen={isPredictionPanelOpen}
+          onClose={() => setActivePanelType(null)}
+          data={predictionData}
+          processParams={processParams}
+        />
+        <OptimizationPanel
+          isOpen={isOptPanelOpen}
+          onClose={() => setActivePanelType(null)}
+          data={optimizationData}
+        />
+      </div>
     </>
   );
 }

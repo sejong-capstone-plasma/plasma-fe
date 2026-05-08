@@ -79,30 +79,77 @@ export type ExtractResponse =
   | ExtractValidationError
   | ExtractFormatError
   | ExtractServerError;
-// ── 예측 결과 타입 ─────────────────────────────────────
-export interface PredictionResultField {
-  value: number;
-  unit:  string;
-}
+
 
 export interface PredictionResult {
-  request_id:        string;
-  process_type:      string;
+  process_params: {
+    pressure:     { value: number, unit: string }
+    source_power: { value: number, unit: string }
+    bias_power:   { value: number, unit: string }
+  };
   prediction_result: {
-    ion_flux:   PredictionResultField;
-    ion_energy: PredictionResultField;
-    etch_score: PredictionResultField;
+    ion_flux:   { value: number, unit: string }
+    ion_energy: { value: number, unit: string }
+    etch_score: { value: number, unit: string }
   };
-  explanation: {
-    summary: string;
-    details: string[];
+  graphs: {
+    cur: { x: number; y: number }[]; 
+    iad: { x: number; y: number }[]; 
+    ied: { x: number; y: number }[]; 
   };
+}
+
+export interface OptimizationCandidate {
+  candidate_id: number;
+  process_params: {
+    pressure:     { value: number; unit: string };
+    source_power: { value: number; unit: string };
+    bias_power:   { value: number; unit: string };
+  };
+  prediction_result: {
+    ion_flux:   { value: number; unit: string };
+    ion_energy: { value: number; unit: string };
+    etch_score: { value: number; unit: string };
+  };
+  graphs: {
+    cur: { x: number; y: number }[];
+    iad: { x: number; y: number }[];
+    ied: { x: number; y: number }[];
+  };
+  parameter_impact: {
+    pressure:     { x: number; y: number }[];
+    source_power: { x: number; y: number }[];
+    bias_power:   { x: number; y: number }[];
+  };
+}
+
+export interface OptimizationCurrent {
+  process_params: {
+    pressure:     { value: number; unit: string };
+    source_power: { value: number; unit: string };
+    bias_power:   { value: number; unit: string };
+  };
+  prediction_result: {
+    ion_flux:   { value: number; unit: string };
+    ion_energy: { value: number; unit: string };
+    etch_score: { value: number; unit: string };
+  };
+  graphs: {
+    cur: { x: number; y: number }[];
+    iad: { x: number; y: number }[];
+    ied: { x: number; y: number }[];
+  };
+}
+
+export interface OptimizationResult {
+  current:      OptimizationCurrent;
+  candidates:   OptimizationCandidate[];  // etch_score 내림차순, 최대 3개
 }
 
 export interface ConfirmResponse {
   validation:      BackendValidationResponse;
   prediction:      PredictionResult | null;
-  optimization:    unknown | null;   
+  optimization:    OptimizationResult | null;  
   comparison:      unknown | null;
   question:        unknown | null;
   executionError:  string | null;
