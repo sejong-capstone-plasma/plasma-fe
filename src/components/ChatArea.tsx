@@ -1,20 +1,24 @@
 import { useEffect, useRef } from 'react';
 import ChatTypes from './chatTypes';
+import type { ConditionParams } from '../types/api';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result' | 'optimization-result';
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' 
+  | 'prediction-result' | 'optimization-result' | 'comparison-result' | 'comparison-confirm';
   loadingText?: string;
 }
 
-export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, onRetry, onOpenPanel }: {
+export default function ChatArea(
+  { messages, isTyping, onConfirm, onReanalyze, onRetry, onOpenPanel, onComparisonConfirm }: {
   messages: ChatMessage[];
   isTyping: boolean;
-  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION', params?: Record<string, number>) => void;
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION' | 'COMPARISON' , params?: Record<string, number>) => void;
   onReanalyze?: (values: Record<string, number>) => void;
   onRetry?: () => void;
   onOpenPanel?: (historyId: string) => void;
+  onComparisonConfirm?: (conditionA: ConditionParams, conditionB: ConditionParams) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -23,7 +27,7 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
   const lastUserIndex = messages.map(m => m.role).lastIndexOf('user');
 
   const lastInteractiveIndex = messages.reduce((last, m, i) =>
-    m.type === 'param-confirm' || m.type === 'param-error' ? i : last, -1
+    m.type === 'param-confirm' || m.type === 'param-error' || m.type === 'comparison-confirm' ?  i : last, -1
   );
 
   useEffect(() => {
@@ -45,7 +49,7 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
             messages.slice(index + 1).every(m => m.role !== 'assistant');
 
           const isLatest =
-            (msg.type === 'param-confirm' || msg.type === 'param-error')
+            (msg.type === 'param-confirm' || msg.type === 'param-error' || msg.type === 'comparison-confirm') 
               ? index === lastInteractiveIndex
               : true;
 
@@ -68,8 +72,9 @@ export default function ChatArea({ messages, isTyping, onConfirm, onReanalyze, o
                   onReanalyze={msg.type === 'param-error' ? onReanalyze : undefined}
                   onRetry={msg.type === 'error-retry' ? onRetry : undefined}
                   loadingText={msg.loadingText}
-                  onOpenPanel={(msg.type === 'prediction-result' || msg.type === 'optimization-result') ? onOpenPanel : undefined}
+                  onOpenPanel={(msg.type === 'prediction-result' || msg.type === 'optimization-result' || msg.type === 'comparison-result') ? onOpenPanel : undefined}
                   disableEdit={msg.type === 'param-confirm' && hasPredictionResult}
+                  onComparisonConfirm={msg.type === 'comparison-confirm' ? onComparisonConfirm : undefined}
                 />
               </div>
             </div>

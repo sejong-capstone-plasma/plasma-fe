@@ -1,5 +1,6 @@
 import type {
   BackendValidationResponse,
+  ConditionParams,
   ConfirmResponse,
   ExtractResponse,
   ExtractSuccessResponse,
@@ -20,6 +21,17 @@ export function adaptResponse(backend: BackendValidationResponse): ExtractRespon
     return { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' };
   }
 
+  if (backend.taskType === 'COMPARISON') {
+    return {
+      success:   true,
+      code:      'READY_FOR_COMPARISON',
+      message:   '아래 내용으로 비교 분석을 진행할까요?',
+      task_type: 'COMPARISON',
+      conditionA: backend.conditionA,
+      conditionB: backend.conditionB,
+    };
+  }
+
   if (backend.allValid) {
     const getParam = (key: string) => {
       const p = backend.parameters.find(p => p.key === key);
@@ -31,7 +43,7 @@ export function adaptResponse(backend: BackendValidationResponse): ExtractRespon
       message: '파라미터가 정상적으로 추출되었습니다. 아래 조건으로 분석을 진행할까요?',
       request_id: backend.requestId,
       process_type: backend.processType ?? '',
-      task_type: (backend.taskType as 'PREDICTION' | 'OPTIMIZATION') ?? 'PREDICTION',
+      task_type: (backend.taskType as 'PREDICTION' | 'OPTIMIZATION' | 'UNSUPPORTED') ?? 'PREDICTION',
       process_params: {
         pressure: getParam('pressure'),
         source_power: getParam('source_power'),
@@ -109,7 +121,7 @@ export interface ExtractResult {
   messageId: number;
   validationId: number;
   response: ExtractResponse;
-  allParams: Record<string, number>; // VALID 포함 전체 파라미터 값
+  allParams: Record<string, number>; 
 }
 
 export async function extractParams(inputText: string, signal?: AbortSignal): Promise<ExtractResult> {
@@ -131,7 +143,6 @@ export async function extractParams(inputText: string, signal?: AbortSignal): Pr
     const validation = data.validations?.[0];
     if (!validation) return { messageId: data.messageId, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }, allParams: {} };
 
-    // value가 존재하는 파라미터 전체 수집 (VALID뿐 아니라 추출된 모든 값 포함)
     const allParams: Record<string, number> = {};
     validation.parameters.forEach(p => {
       if (p.value != null) allParams[p.key] = p.value as number;
@@ -198,15 +209,23 @@ export async function revalidateParams(
 export async function confirmValidation(
   messageId: number,
   validationId: number,
-  requestedTaskType?: 'PREDICTION' | 'OPTIMIZATION')
-  : Promise<ConfirmResponse | null> {
+  requestedTaskType?: 'PREDICTION' | 'OPTIMIZATION' | 'COMPARISON',
+  comparisonParams?: { conditionA: ConditionParams; conditionB: ConditionParams }
+): Promise<ConfirmResponse | null> {
   try {
+    const body: Record<string, unknown> = {};
+    if (requestedTaskType) body.requestedTaskType = requestedTaskType;
+    if (comparisonParams) {
+      body.conditionA = comparisonParams.conditionA;
+      body.conditionB = comparisonParams.conditionB;
+    }
+
     const res = await fetch(`/api/chat/messages/${messageId}/validations/${validationId}/confirm`, {
-      method: 'POST',
-      headers: requestedTaskType ? { 'Content-Type': 'application/json' } : undefined,
-      body: requestedTaskType ? JSON.stringify({ requestedTaskType }) : undefined,
-      ...FETCH_OPTS,
-    });
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+  ...FETCH_OPTS,
+});
     if (!res.ok) return null;
     return await res.json() as ConfirmResponse;
   } catch {

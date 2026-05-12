@@ -1,4 +1,4 @@
-// ── 요청 ──────────────────────────────────────────────
+// ── 요청 ──────────────────────────────────────────
 export interface ExtractRequest {
   inputText: string;
 }
@@ -18,9 +18,9 @@ export interface BackendValidationResponse {
   messageId:        number;
   attemptNo:        number;
   sourceType:       string;
-  validationStatus: string;   // 'VALID' | 'AI_ERROR' | 'UNKNOWN' 등
+  validationStatus: string;   
   processType:      string | null;
-  taskType:         string | null;   // 'PREDICTION' | 'OPTIMIZATION'
+  taskType:         string | null;   
   parameters:       BackendParamField[];
   currentEr:        BackendParamField | null;
   allValid:         boolean;
@@ -29,21 +29,45 @@ export interface BackendValidationResponse {
   predictionError:  string | null;
   failureReason:    string | null;
   createdAt:        string;
+  conditionA: {
+    label: string;
+    parameters: BackendParamField[];
+  } | null;
+  conditionB: {
+    label: string;
+    parameters: BackendParamField[];
+  } | null;
 }
 
 // ── 프론트엔드 내부 타입 (ChatTypes에서 사용) ─────────
+export type ExtractResponse =
+  | ExtractSuccessResponse
+  | ExtractComparisonResponse
+  | ExtractValidationError
+  | ExtractFormatError
+  | ExtractServerError;
+
 export interface ExtractSuccessResponse {
   success:      true;
   code:         'READY_FOR_PREDICTION';
   message:      string;
   request_id:   string;
   process_type: string;
-  task_type:    'PREDICTION' | 'OPTIMIZATION';
+  task_type:    'PREDICTION' | 'OPTIMIZATION' | 'COMPARISON' | 'UNSUPPORTED';
   process_params: {
       pressure:     ParamField;
       source_power: ParamField;
       bias_power:   ParamField;
   };
+}
+
+export interface ExtractComparisonResponse {
+  success:   true;
+  code:      'READY_FOR_COMPARISON';
+  message:   string;
+  task_type: 'COMPARISON';
+  conditionA: { label: string; parameters: BackendParamField[] } | null;
+  conditionB: { label: string; parameters: BackendParamField[] } | null;
 }
 
 export interface ParamField {
@@ -74,13 +98,6 @@ export interface ExtractServerError {
   message: string;
 }
 
-export type ExtractResponse =
-  | ExtractSuccessResponse
-  | ExtractValidationError
-  | ExtractFormatError
-  | ExtractServerError;
-
-
 export interface PredictionResult {
   process_params: {
     pressure:     { value: number, unit: string }
@@ -97,6 +114,12 @@ export interface PredictionResult {
     iad: { x: number; y: number }[]; 
     ied: { x: number; y: number }[]; 
   };
+}
+
+export interface ConditionParams {
+  pressure:     { value: number; unit: string };
+  source_power: { value: number; unit: string };
+  bias_power:   { value: number; unit: string };
 }
 
 export interface OptimizationCandidate {
@@ -150,8 +173,35 @@ export interface ConfirmResponse {
   validation:      BackendValidationResponse;
   prediction:      PredictionResult | null;
   optimization:    OptimizationResult | null;  
-  comparison:      unknown | null;
+  comparison:      ComparisonResult | null;
   question:        unknown | null;
   executionError:  string | null;
   predictionError: string | null;
+}
+
+export interface ComparisonSide {
+  label: string;
+  processType: string;
+  parameters: BackendParamField[];
+  prediction: {
+    prediction_result: {
+      ion_flux:   { value: number; unit: string };
+      ion_energy: { value: number; unit: string };
+      etch_score: { value: number; unit: string };
+    };
+  };
+}
+
+export interface ComparisonResult {
+  left:  ComparisonSide;
+  right: ComparisonSide;
+  difference: {
+    ionFluxDelta:    number;
+    ionFluxUnit:     string;
+    ionEnergyDelta:  number;
+    ionEnergyUnit:   string;
+    etchScoreDelta:  number;
+    etchScoreUnit:   string;
+  };
+  summary: string | null;
 }

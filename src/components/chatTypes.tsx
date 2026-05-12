@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { colors, typography } from '../styles/tokens';
-import type { ExtractSuccessResponse, ExtractValidationError } from '../types/api';
+import type {
+  ExtractComparisonResponse, ExtractSuccessResponse,
+  ExtractValidationError, BackendParamField, ConditionParams
+} from '../types/api';
 
 interface ChatProps {
   role: 'user' | 'assistant';
@@ -8,13 +11,16 @@ interface ChatProps {
   isTyping?: boolean;
   isLastAssistant?: boolean;
   isLatest?: boolean;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result' | 'optimization-result';
-  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION', params?: Record<string, number>) => void;
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry'
+  | 'prediction-result' | 'optimization-result' | 'comparison-result' | 'comparison-confirm';
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION' | 'COMPARISON', params?: Record<string, number>) => void;
   onReanalyze?: (values: Record<string, number>) => void;
   onRetry?: () => void;
-  loadingText?: string;
+  nOpenPanel?: (historyId: string) => void;
   onOpenPanel?: (historyId: string) => void;
+  loadingText?: string;
   disableEdit?: boolean;
+  onComparisonConfirm?: (conditionA: ConditionParams, conditionB: ConditionParams) => void;
 }
 
 // ── 마크다운 굵기 파싱 ──────────────────────────────────
@@ -46,22 +52,20 @@ const PARAM_UNIT: Record<string, string> = {
 };
 
 const PARAM_RANGE: Record<string, string> = {
-  pressure: '2 ~ 10 mTorr',
-  source_power: '100 ~ 500 W',
-  bias_power: '0 ~ 1000 W',
+  pressure: '2 ~ 10',
+  source_power: '100 ~ 500',
+  bias_power: '0 ~ 1000',
 };
 
 type ParamMap = Record<string, { value: number; unit: string; status: 'VALID' }>;
 
 function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
   data: ExtractSuccessResponse;
-  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION', params?: Record<string, number>) => void;
+  onConfirm?: (taskType: 'PREDICTION' | 'OPTIMIZATION' | 'COMPARISON', params?: Record<string, number>) => void;
   isLatest?: boolean;
   disableEdit?: boolean;
 }) {
-  const [params, setParams] = useState<ParamMap>(
-    data.process_params as unknown as ParamMap
-  );
+  const [params, setParams] = useState<ParamMap>(data.process_params as unknown as ParamMap);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
 
@@ -81,6 +85,7 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
 
   const cancelEdit = () => setEditingField(null);
   const entries = Object.entries(params) as [string, { value: number; unit: string }][];
+  const taskType = data.task_type;
 
   return (
     <div style={{
@@ -157,46 +162,46 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
       ))}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '10px', borderTop: `1px solid ${colors.slate[200]}` }}>
-        <button
-          onClick={() => {
-            const currentValues = Object.fromEntries(
-              entries.map(([k, v]) => [k, v.value])
-            );
-            onConfirm?.('PREDICTION', currentValues);
-          }}
-          disabled={!isLatest}
-          style={{
-            fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-            color: colors.surface.white,
-            backgroundColor: isLatest ? colors.primary[500] : colors.slate[300],
-            border: 'none', borderRadius: '6px', padding: '6px 14px',
-            cursor: isLatest ? 'pointer' : 'default',
-            transition: 'background-color 0.15s ease',
-          }}
-          onMouseEnter={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
-          onMouseLeave={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[500]; }}>
-          예측
-        </button>
-        <button
-          onClick={() => {
-            const currentValues = Object.fromEntries(
-              entries.map(([k, v]) => [k, v.value])
-            );
-            onConfirm?.('OPTIMIZATION', currentValues);
-          }}
-          disabled={!isLatest}
-          style={{
-            fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-            color: colors.surface.white,
-            backgroundColor: isLatest ? colors.primary[500] : colors.slate[300],
-            border: 'none', borderRadius: '6px', padding: '6px 14px',
-            cursor: isLatest ? 'pointer' : 'default',
-            transition: 'background-color 0.15s ease',
-          }}
-          onMouseEnter={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
-          onMouseLeave={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[500]; }}>
-          최적화
-        </button>
+        {(taskType === 'PREDICTION' || taskType === 'UNSUPPORTED' || !taskType) && (
+          <button
+            onClick={() => {
+              const currentValues = Object.fromEntries(entries.map(([k, v]) => [k, v.value]));
+              onConfirm?.('PREDICTION', currentValues);
+            }}
+            disabled={!isLatest}
+            style={{
+              fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+              color: colors.surface.white,
+              backgroundColor: isLatest ? colors.primary[500] : colors.slate[300],
+              border: 'none', borderRadius: '6px', padding: '6px 14px',
+              cursor: isLatest ? 'pointer' : 'default',
+              transition: 'background-color 0.15s ease',
+            }}
+            onMouseEnter={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
+            onMouseLeave={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[500]; }}>
+            예측
+          </button>
+        )}
+        {(taskType === 'OPTIMIZATION' || taskType === 'UNSUPPORTED' || !taskType) && (
+          <button
+            onClick={() => {
+              const currentValues = Object.fromEntries(entries.map(([k, v]) => [k, v.value]));
+              onConfirm?.('OPTIMIZATION', currentValues);
+            }}
+            disabled={!isLatest}
+            style={{
+              fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+              color: colors.surface.white,
+              backgroundColor: isLatest ? colors.primary[500] : colors.slate[300],
+              border: 'none', borderRadius: '6px', padding: '6px 14px',
+              cursor: isLatest ? 'pointer' : 'default',
+              transition: 'background-color 0.15s ease',
+            }}
+            onMouseEnter={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
+            onMouseLeave={e => { if (isLatest) e.currentTarget.style.backgroundColor = colors.primary[500]; }}>
+            최적화
+          </button>
+        )}
       </div>
     </div>
   );
@@ -355,8 +360,192 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
   );
 }
 
+function ComparisonConfirmCard({ data, onComparisonConfirm, isLatest }: {
+  data: ExtractComparisonResponse;
+  onComparisonConfirm?: (conditionA: ConditionParams, conditionB: ConditionParams) => void;
+  isLatest?: boolean;
+}) {
+  const initParams = (params: BackendParamField[]) =>
+    Object.fromEntries(params.map(p => [
+      p.key,
+      {
+        value: (p.status === 'MISSING' || p.status === 'OUT_OF_RANGE') ? '' : String(p.value ?? ''),
+        unit: p.unit,
+        status: p.status,
+      }
+    ]));
+
+  const [paramsA, setParamsA] = useState<Record<string, { value: string; unit: string; status: string }>>(
+    initParams(data.conditionA?.parameters ?? [])
+  );
+  const [paramsB, setParamsB] = useState<Record<string, { value: string; unit: string; status: string }>>(
+    initParams(data.conditionB?.parameters ?? [])
+  );
+
+  const PARAM_MIN: Record<string, number> = { pressure: 2, source_power: 100, bias_power: 0 };
+  const PARAM_MAX: Record<string, number> = { pressure: 10, source_power: 500, bias_power: 1000 };
+
+  const isInRange = (key: string, val: string) => {
+    const v = parseFloat(val);
+    if (isNaN(v)) return false;
+    if (PARAM_MIN[key] !== undefined && v < PARAM_MIN[key]) return false;
+    if (PARAM_MAX[key] !== undefined && v > PARAM_MAX[key]) return false;
+    return true;
+  };
+
+  const allFilled = isLatest &&
+    Object.entries(paramsA).every(([k, v]) => v.value.trim() !== '' && isInRange(k, v.value)) &&
+    Object.entries(paramsB).every(([k, v]) => v.value.trim() !== '' && isInRange(k, v.value));
+
+  const handleConfirm = () => {
+    if (!allFilled) return;
+    const toConditionParams = (params: Record<string, { value: string; unit: string; status: string }>): ConditionParams => ({
+      pressure:     { value: parseFloat(params.pressure.value),     unit: params.pressure.unit },
+      source_power: { value: parseFloat(params.source_power.value), unit: params.source_power.unit },
+      bias_power:   { value: parseFloat(params.bias_power.value),   unit: params.bias_power.unit },
+    });
+    onComparisonConfirm?.(toConditionParams(paramsA), toConditionParams(paramsB));
+  };
+
+  const renderParams = (
+    params: Record<string, { value: string; unit: string; status: string }>,
+    setParams: React.Dispatch<React.SetStateAction<Record<string, { value: string; unit: string; status: string }>>>
+  ) => (
+    Object.entries(params).map(([key, field]) => {
+      const invalid = field.value !== '' && !isInRange(key, field.value);
+      return (
+        <div key={key} style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          marginBottom: '4px',
+        }}>
+          <span style={{ fontSize: typography.size.xs, color: colors.slate[500], minWidth: '72px', flexShrink: 0 }}>
+            {PARAM_LABEL[key] ?? key}
+          </span>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <input
+              type="number"
+              value={field.value}
+              disabled={!isLatest}
+              placeholder={PARAM_RANGE[key] ?? '—'}
+              onChange={e => setParams(prev => ({
+                ...prev,
+                [key]: { ...prev[key], value: e.target.value }
+              }))}
+              style={{
+                flex: 1,
+                fontSize: typography.size.sm,
+                color: colors.slate[900],
+                border: `1px solid ${invalid ? colors.semantic.error : colors.slate[300]}`,
+                borderRadius: '6px',
+                padding: '5px 10px',
+                outline: 'none',
+                backgroundColor: isLatest ? colors.surface.white : colors.slate[100],
+                transition: 'border-color 0.15s',
+                cursor: isLatest ? 'text' : 'default',
+                width: '100%',
+              }}
+              onFocus={e => {
+                if (isLatest) e.currentTarget.style.borderColor = invalid
+                  ? colors.semantic.error
+                  : colors.primary[400];
+              }}
+              onBlur={e => {
+                e.currentTarget.style.borderColor = field.value && !isInRange(key, field.value)
+                  ? colors.semantic.error
+                  : colors.slate[300];
+              }}
+            />
+            <span style={{ fontSize: typography.size.xs, color: colors.slate[400], flexShrink: 0 }}>
+              {field.unit}
+            </span>
+          </div>
+        </div>
+      );
+    })
+  );
+
+  return (
+    <div style={{
+      border: `0.5px solid ${colors.slate[300]}`,
+      borderRadius: '10px',
+      padding: '12px 14px',
+      backgroundColor: colors.surface.card,
+      maxWidth: '560px',
+      minWidth: '400px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px',
+      opacity: isLatest ? 1 : 0.5,
+    }}>
+      <span style={{
+        fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+        color: colors.primary[600], backgroundColor: colors.primary[50],
+        padding: '2px 8px', borderRadius: '4px', border: `1px solid ${colors.primary[100]}`,
+        alignSelf: 'flex-start',
+      }}>
+        파라미터 확인
+      </span>
+
+      <div style={{ display: 'flex', gap: '0px', alignItems: 'stretch' }}>
+        {[
+          { label: '조건 A', params: paramsA, setParams: setParamsA },
+          { label: '조건 B', params: paramsB, setParams: setParamsB },
+        ].map(({ label, params, setParams }, colIdx) => (
+          <>
+            {colIdx === 1 && (
+              <div style={{ width: '1px', backgroundColor: colors.slate[100], margin: '0 8px', flexShrink: 0 }} />
+            )}
+            <div key={label} style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              padding: '8px 10px',
+              backgroundColor: colors.slate[50],
+              borderRadius: '8px',
+            }}>
+              <span style={{
+                fontSize: typography.size.xs,
+                color: colors.slate[700],
+                fontWeight: typography.weight.medium,
+                marginBottom: '6px',
+                paddingBottom: '6px',
+                borderBottom: `1px solid ${colors.slate[200]}`,
+              }}>
+                {label}
+              </span>
+              {renderParams(params, setParams)}
+            </div>
+          </>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px', borderTop: `1px solid ${colors.slate[200]}` }}>
+        <button
+          onClick={handleConfirm}
+          disabled={!allFilled}
+          style={{
+            fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+            color: colors.surface.white,
+            backgroundColor: allFilled ? colors.primary[500] : colors.slate[300],
+            border: 'none', borderRadius: '6px', padding: '6px 14px',
+            cursor: allFilled ? 'pointer' : 'default',
+            transition: 'background-color 0.15s ease',
+          }}
+          onMouseEnter={e => { if (allFilled) e.currentTarget.style.backgroundColor = colors.primary[600]; }}
+          onMouseLeave={e => { if (allFilled) e.currentTarget.style.backgroundColor = colors.primary[500]; }}>
+          비교 분석
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 컴포넌트 ──────────────────────────────────────
-export default function ChatTypes({ role, content, isTyping, isLastAssistant, isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText, disableEdit, onOpenPanel }: ChatProps) {
+export default function ChatTypes({ role, content, isTyping, isLastAssistant, 
+  isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText, 
+  disableEdit, onOpenPanel, onComparisonConfirm }: ChatProps) {
   const isUser = role === 'user';
   const isWaiting = isTyping && content === '';
   const PERIMETER = 56;
@@ -469,6 +658,66 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
         </div>
       );
     }
+
+    if (type === 'comparison-confirm') {
+      try {
+        const data = JSON.parse(content) as ExtractComparisonResponse;
+        return <ComparisonConfirmCard data={data} onComparisonConfirm={onComparisonConfirm} isLatest={isLatest} />;
+      } catch {
+        return null;
+      }
+    }
+
+    if (type === 'comparison-result') {
+      try {
+        const data = JSON.parse(content);
+        return (
+          <div style={{
+            border: `0.5px solid ${colors.slate[300]}`,
+            borderRadius: '10px',
+            padding: '12px 14px',
+            backgroundColor: colors.surface.card,
+            maxWidth: '400px',
+            minWidth: '280px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{
+                fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                color: colors.primary[600], backgroundColor: colors.primary[50],
+                padding: '2px 8px', borderRadius: '4px', border: `1px solid ${colors.primary[100]}`,
+                alignSelf: 'flex-start',
+              }}>
+                비교 완료
+              </span>
+              <span style={{ fontSize: typography.size.xs, color: colors.slate[400], marginTop: '2px' }}>
+                Etch Score 차이: <span style={{ fontWeight: typography.weight.medium, color: colors.slate[700] }}>
+                  {data.difference?.etchScoreDelta?.toFixed(2)}
+                </span> {data.difference?.etchScoreUnit}
+              </span>
+            </div>
+            <button
+              onClick={() => onOpenPanel?.('comparison')}
+              style={{
+                fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                color: colors.surface.white, backgroundColor: colors.primary[500],
+                border: 'none', borderRadius: '6px', padding: '6px 14px',
+                cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = colors.primary[600])}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = colors.primary[500])}
+            >
+              결과 보기
+            </button>
+          </div>
+        );
+      } catch {
+        return null;
+      }
+    }
     if (type === 'error') {
       return (
         <span style={{ color: colors.semantic.error, fontSize: typography.size.md }}>
@@ -535,8 +784,8 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant, is
         {renderBody()}
 
         {!isUser && isLastAssistant && (
-          <div 
-          style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
             {isWaiting && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ width: '16px', height: '16px', backgroundColor: colors.primary[500], borderRadius: '10px', animation: 'breathe 1.8s ease-in-out infinite', flexShrink: 0 }} />

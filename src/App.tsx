@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import PredictionPanel from './components/PredictionPanel';
 import OptimizationPanel from './components/OptimizationPanel';
+import ComparisonPanel from './components/ComparisonPanel'
 import ChatArea from './components/ChatArea';
 import Header from './components/Header';
 import InputArea, { type InputAreaHandle } from './components/InputArea';
@@ -12,27 +13,15 @@ import {
   getCurrentSessionId
 } from './api/analysis';
 import { colors, typography } from './styles/tokens';
-import type { ExtractValidationError, PredictionResult, OptimizationResult } from './types/api';
+import type {
+  ExtractValidationError, PredictionResult,
+  OptimizationResult, ComparisonResult, ConditionParams
+} from './types/api';
 
 interface ProcessParams {
   pressure: number;
   source_power: number;
   bias_power: number;
-}
-
-export interface PredictionHistoryItem {
-  id: string;
-  createdAt: Date;
-  label: string;
-  processParams: ProcessParams;
-  predictionData: import('./types/api').PredictionResult;
-}
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry' | 'prediction-result' | 'optimization-result';
-  loadingText?: string;
 }
 
 const WELCOME_MESSAGE =
@@ -49,23 +38,39 @@ const WELCOME_MESSAGE =
   · "압력 8mTorr 조건이랑 압력 10mTorr 조건 비교해줘"
   · "ion flux가 뭐야?"`;
 
+export interface PredictionHistoryItem {
+  id: string;
+  createdAt: Date;
+  label: string;
+  processParams: ProcessParams;
+  predictionData: import('./types/api').PredictionResult;
+}
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  type?: 'default' | 'param-confirm' | 'param-error' | 'error' | 'error-retry'
+  | 'prediction-result' | 'optimization-result' | 'comparison-result' | 'comparison-confirm';
+  loadingText?: string;
+}
+
 export default function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
   const isSending = useRef(false);
   const hasWelcomed = useRef(false);
   const lastInput = useRef<string>('');
   const inputAreaRef = useRef<InputAreaHandle>(null);
   const abortCtrlRef = useRef<AbortController | null>(null);
-
   const currentMessageId = useRef<number>(-1);
   const currentValidationId = useRef<number>(-1);
   const lastKnownParams = useRef<Record<string, number>>({});
 
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [activePanelType, setActivePanelType] = useState<'prediction' | 'optimization' | null>(null);
+  const [activePanelType, setActivePanelType] = useState<'prediction' | 'optimization' | 'comparison' | null>(null);
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null);
   const [optimizationData] = useState<OptimizationResult | null>(null);
+  const [comparisonData, setComparisonData] = useState<ComparisonResult | null>(null);
   const [processParams, setProcessParams] = useState<ProcessParams | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryItem[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(getCurrentSessionId());
@@ -73,6 +78,7 @@ export default function App() {
 
   const isPredictionPanelOpen = activePanelType === 'prediction';
   const isOptPanelOpen = activePanelType === 'optimization';
+  const isComparisonPanelOpen = activePanelType === 'comparison';
 
   // ── 말풍선 타이핑 효과 ──────────────────────────────
   const typeMessage = (text: string, speed = 18): Promise<void> => {
@@ -160,23 +166,36 @@ export default function App() {
     lastKnownParams.current = allParams;
     setSessionRefreshTrigger(prev => prev + 1)
 
-    if (result.success) {
+    if (result.success && result.code === 'READY_FOR_COMPARISON') {
       await typeMessage(result.message);
       setMessages(prev => [...prev, {
-        role: 'assistant', content: JSON.stringify(result), type: 'param-confirm',
+        role: 'assistant',
+        content: JSON.stringify(result),
+        type: 'comparison-confirm',
+      }]);
+    } else if (result.success) {
+      await typeMessage(result.message);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: JSON.stringify(result),
+        type: 'param-confirm',
       }]);
     } else if (!result.success && 'code' in result && result.code === 'INPUT_VALIDATION_FAILED') {
       const err = result as ExtractValidationError;
       await typeMessage(err.message);
       setMessages(prev => [...prev, {
-        role: 'assistant', content: JSON.stringify(err), type: 'param-error',
+        role: 'assistant',
+        content: JSON.stringify(err),
+        type: 'param-error',
       }]);
     } else if ('code' in result && result.code === 'INVALID_JSON') {
       await typeMessage('입력을 처리하지 못했습니다. 다시 입력해 주세요.', 14);
       setTimeout(() => inputAreaRef.current?.focus(), 50);
     } else {
       setMessages(prev => [...prev, {
-        role: 'assistant', content: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', type: 'error-retry',
+        role: 'assistant',
+        content: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+        type: 'error-retry',
       }]);
     }
 
@@ -186,7 +205,9 @@ export default function App() {
   };
 
   // ── 분석 실행 확정 ────────────────────────────────────
-  const handleConfirm = async (taskType: 'PREDICTION' | 'OPTIMIZATION', currentParams?: Record<string, number>) => {
+  const handleConfirm = async (
+    taskType: 'PREDICTION' | 'OPTIMIZATION' | 'COMPARISON',
+    currentParams?: Record<string, number>) => {
     const mId = currentMessageId.current;
     const vId = currentValidationId.current;
     if (mId === -1 || vId === -1) return;
@@ -210,9 +231,10 @@ export default function App() {
       }
     }
 
-    const loadingText = taskType === 'OPTIMIZATION'
-      ? '최적화 분석을 실행하고 있습니다...'
-      : '예측 분석을 실행하고 있습니다...';
+    const loadingText =
+      taskType === 'OPTIMIZATION' ? '최적화 분석을 실행하고 있습니다...' :
+        taskType === 'COMPARISON' ? '비교 분석을 실행하고 있습니다...' :
+          '예측 분석을 실행하고 있습니다...';
 
     setMessages(prev => [...prev, {
       role: 'assistant', content: '', type: 'default', loadingText,
@@ -220,14 +242,16 @@ export default function App() {
     setIsTyping(true);
 
     const confirmRes = await confirmValidation(mId, currentValidationId.current, taskType);
-
     setMessages(prev => prev.filter(m => m.loadingText !== loadingText));
     setIsTyping(false);
 
     if (!confirmRes) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `${taskType === 'OPTIMIZATION' ? '최적화' : '예측'} 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.`,
+        content:
+          taskType === 'OPTIMIZATION' ? '최적화 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.' :
+            taskType === 'COMPARISON' ? '비교 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.' :
+              '예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
         type: 'error-retry',
       }]);
       return;
@@ -236,7 +260,10 @@ export default function App() {
     if (confirmRes.executionError) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `${taskType === 'OPTIMIZATION' ? '최적화' : '예측'} 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.`,
+        content:
+          taskType === 'OPTIMIZATION' ? '최적화 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' :
+            taskType === 'COMPARISON' ? '비교 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' :
+              '예측 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
         type: 'error-retry',
       }]);
       return;
@@ -261,8 +288,34 @@ export default function App() {
       return;
     }
 
+    if (taskType === 'COMPARISON') {
+      if (!confirmRes.comparison) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '비교 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          type: 'error-retry',
+        }]);
+        return;
+      }
+      setComparisonData(confirmRes.comparison);
+      setActivePanelType('comparison');
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: JSON.stringify(confirmRes.comparison),
+        type: 'comparison-result',
+      }]);
+      return;
+    }
 
-    if (confirmRes.prediction) {
+    if (taskType === 'PREDICTION') {
+      if (!confirmRes.prediction) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          type: 'error-retry',
+        }]);
+        return;
+      }
       const pred = confirmRes.prediction;
       let params: ProcessParams | null = null;
       if (confirmRes.validation?.parameters) {
@@ -294,16 +347,60 @@ export default function App() {
       setPredictionData(pred);
       if (params) setProcessParams(params);
       setActivePanelType('prediction');
-    } 
-    else {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
-        type: 'error-retry',
-      }]);
     }
   };
 
+  const handleComparisonConfirm = async (conditionA: ConditionParams, conditionB: ConditionParams) => {
+    const mId = currentMessageId.current;
+    const vId = currentValidationId.current;
+    if (mId === -1 || vId === -1) return;
+
+    const loadingText = '비교 분석을 실행하고 있습니다...';
+    setMessages(prev => [...prev, {
+      role: 'assistant', content: '', type: 'default', loadingText,
+    }]);
+    setIsTyping(true);
+
+    const confirmRes = await confirmValidation(mId, vId, 'COMPARISON', { conditionA, conditionB });
+
+    setMessages(prev => prev.filter(m => m.loadingText !== loadingText));
+    setIsTyping(false);
+
+    if (!confirmRes) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '비교 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        type: 'error-retry',
+      }]);
+      return;
+    }
+
+    if (confirmRes.executionError) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '비교 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+        type: 'error-retry',
+      }]);
+      return;
+    }
+
+    if (!confirmRes.comparison) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '비교 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        type: 'error-retry',
+      }]);
+      return;
+    }
+
+    setComparisonData(confirmRes.comparison);
+    setActivePanelType('comparison');
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: JSON.stringify(confirmRes.comparison),
+      type: 'comparison-result',
+    }]);
+  };
 
   // ── 재검증 ────────────────────────────────────────────
   const handleReanalyze = async (values: Record<string, number>) => {
@@ -482,9 +579,14 @@ export default function App() {
                 onConfirm={handleConfirm}
                 onReanalyze={handleReanalyze}
                 onRetry={handleRetry}
+                onComparisonConfirm={handleComparisonConfirm}
                 onOpenPanel={(historyId) => {
                   if (historyId === 'optimization') {
                     setActivePanelType('optimization');
+                    return;
+                  }
+                  if (historyId === 'comparison') {   
+                    setActivePanelType('comparison');
                     return;
                   }
                   const item = predictionHistory.find(h => h.id === historyId);
@@ -516,6 +618,11 @@ export default function App() {
           isOpen={isOptPanelOpen}
           onClose={() => setActivePanelType(null)}
           data={optimizationData}
+        />
+        <ComparisonPanel
+          isOpen={isComparisonPanelOpen}
+          onClose={() => setActivePanelType(null)}
+          data={comparisonData}
         />
       </div>
     </>
