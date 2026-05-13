@@ -52,7 +52,18 @@ export interface OptimizationHistoryItem {
   id: string;
   createdAt: Date;
   label: string;
+  currentScore: number;
+  bestScore: number;
   optimizationData: import('./types/api').OptimizationResult;
+}
+
+export interface ComparisonHistoryItem {
+  id: string;
+  createdAt: Date;
+  label: string;
+  leftLabel: string;
+  rightLabel: string;
+  comparisonData: import('./types/api').ComparisonResult;
 }
 
 interface Message {
@@ -83,6 +94,7 @@ export default function App() {
   const [processParams, setProcessParams] = useState<ProcessParams | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryItem[]>([]);
   const [optimizationHistory, setOptimizationHistory] = useState<OptimizationHistoryItem[]>([]);
+  const [comparisonHistory, setComparisonHistory] = useState<ComparisonHistoryItem[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string>(getCurrentSessionId());
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
   const [plasmaDistribution, setPlasmaDistribution] = useState<PlasmaDistribution | null>(null);
@@ -291,10 +303,11 @@ export default function App() {
 
     if (taskType === 'OPTIMIZATION') {
       if (!confirmRes.optimization) {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: '최적화 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 
-          type: 'error-retry' }]);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '최적화 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          type: 'error-retry'
+        }]);
         return;
       }
       const optData = confirmRes.optimization;
@@ -307,14 +320,24 @@ export default function App() {
         : '최적화 결과';
 
       const histId = `opt-${Date.now()}`;
-      setOptimizationHistory(prev => [{ id: histId, createdAt: new Date(), label, optimizationData: optData }, ...prev]);
+      const currentScore = optData.current.prediction_result.etch_score.value;
+      const bestScore = Math.max(...optData.candidates.map(c => c.prediction_result.etch_score.value));
+      setOptimizationHistory(prev => [{
+        id: histId,
+        createdAt: new Date(),
+        label,
+        currentScore,
+        bestScore,
+        optimizationData: optData,
+      }, ...prev]);
 
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: JSON.stringify({
           historyId: histId,
           label,
-          candidateCount: optData.candidates.length,
+          currentScore,
+          bestScore,
         }),
         type: 'optimization-result',
       }]);
@@ -331,11 +354,36 @@ export default function App() {
         }]);
         return;
       }
-      setComparisonData(confirmRes.comparison);
+      const cmpData = confirmRes.comparison;
+      const histId = `cmp-${Date.now()}`;
+      const getLabel = (params: typeof cmpData.left.parameters) => {
+        const get = (key: string) => params.find(p => p.key === key)?.value ?? '?';
+        return `P ${get('pressure')}mTorr / SP ${get('source_power')}W / BP ${get('bias_power')}W`;
+      };
+      const leftLabel = getLabel(cmpData.left.parameters);
+      const rightLabel = getLabel(cmpData.right.parameters);
+
+      const leftP = cmpData.left.parameters.find(p => p.key === 'pressure')?.value ?? '?';
+      const rightP = cmpData.right.parameters.find(p => p.key === 'pressure')?.value ?? '?';
+      const cmpLabel = `A(${leftP}mTorr) vs B(${rightP}mTorr)`;
+      setComparisonHistory(prev => [{
+        id: histId,
+        createdAt: new Date(),
+        label: cmpLabel,
+        leftLabel,
+        rightLabel,
+        comparisonData: cmpData,
+      }, ...prev]);
+      setComparisonData(cmpData);
       setActivePanelType('comparison');
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: JSON.stringify(confirmRes.comparison),
+        content: JSON.stringify({
+          historyId: histId,
+          label: cmpLabel,
+          etchScoreDelta: cmpData.difference.etchScoreDelta,
+          etchScoreUnit: cmpData.difference.etchScoreUnit,
+        }),
         type: 'comparison-result',
       }]);
       return;
@@ -375,10 +423,11 @@ export default function App() {
 
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: JSON.stringify({ 
-          historyId, 
-          etch_score: pred.prediction_result.etch_score.value, 
-          label: historyItem.label }),
+        content: JSON.stringify({
+          historyId,
+          etch_score: pred.prediction_result.etch_score.value,
+          label: historyItem.label
+        }),
         type: 'prediction-result',
       }]);
 
@@ -432,11 +481,38 @@ export default function App() {
       return;
     }
 
-    setComparisonData(confirmRes.comparison);
+    const cmpData = confirmRes.comparison;
+    const histId = `cmp-${Date.now()}`;
+    const getLabel = (params: typeof cmpData.left.parameters) => {
+      const get = (key: string) => params.find(p => p.key === key)?.value ?? '?';
+      return `P ${get('pressure')}mTorr / SP ${get('source_power')}W / BP ${get('bias_power')}W`;
+    };
+    const leftLabel = getLabel(cmpData.left.parameters);
+    const rightLabel = getLabel(cmpData.right.parameters);
+
+    const leftP = cmpData.left.parameters.find(p => p.key === 'pressure')?.value ?? '?';
+    const rightP = cmpData.right.parameters.find(p => p.key === 'pressure')?.value ?? '?';
+    const cmpLabel = `A(${leftP}mTorr) vs B(${rightP}mTorr)`;
+    setComparisonHistory(prev => [{
+      id: histId,
+      createdAt: new Date(),
+      label: cmpLabel,
+      leftLabel,
+      rightLabel,
+      comparisonData: cmpData
+    }, ...prev]);
+    setComparisonData(cmpData);
     setActivePanelType('comparison');
     setMessages(prev => [...prev, {
       role: 'assistant',
-      content: JSON.stringify(confirmRes.comparison),
+      content: JSON.stringify({
+        historyId: histId,
+        label: cmpLabel,
+        leftLabel,
+        rightLabel,
+        etchScoreDelta: cmpData.difference.etchScoreDelta,
+        etchScoreUnit: cmpData.difference.etchScoreUnit,
+      }),
       type: 'comparison-result',
     }]);
   };
@@ -568,7 +644,8 @@ export default function App() {
       <div className="flex h-screen bg-white text-slate-900 overflow-hidden font-sans">
         <Sidebar
           predictionHistory={predictionHistory}
-          optimizationHistory={optimizationHistory} 
+          optimizationHistory={optimizationHistory}
+          comparisonHistory={comparisonHistory}
           activeSessionId={activeSessionId}
           onSelectHistory={(item) => {
             setPredictionData(item.predictionData);
@@ -576,9 +653,13 @@ export default function App() {
             setPlasmaDistribution(item.plasmaDistribution ?? null);
             setActivePanelType('prediction');
           }}
-          onSelectOptHistory={(item) => {                     
+          onSelectOptHistory={(item) => {
             setOptimizationData(item.optimizationData);
             setActivePanelType('optimization');
+          }}
+          onSelectCmpHistory={(item) => {
+            setComparisonData(item.comparisonData);
+            setActivePanelType('comparison');
           }}
           onNewChat={() => {
             setMessages([]);
@@ -632,6 +713,14 @@ export default function App() {
                     if (item) {
                       setOptimizationData(item.optimizationData);
                       setActivePanelType('optimization');
+                    }
+                    return;
+                  }
+                  if (historyId.startsWith('cmp-')) {
+                    const item = comparisonHistory.find(h => h.id === historyId);
+                    if (item) {
+                      setComparisonData(item.comparisonData);
+                      setActivePanelType('comparison');
                     }
                     return;
                   }

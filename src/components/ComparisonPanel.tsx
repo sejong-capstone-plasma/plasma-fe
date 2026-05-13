@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Chart, registerables } from 'chart.js';
 import { colors, typography } from '../styles/tokens';
 import type { ComparisonResult } from '../types/api';
+
+Chart.register(...registerables);
 
 interface ComparisonPanelProps {
     isOpen: boolean;
@@ -52,9 +55,70 @@ const rowCard: React.CSSProperties = {
     overflow: 'hidden',
 };
 
+const chartOpts = (xlabel: string, ylabel: string, xMax?: number) => ({
+    responsive: true, maintainAspectRatio: false, animation: false as const,
+    plugins: { legend: { display: false } },
+    scales: {
+        x: {
+            grid: { display: false }, border: { display: false },
+            ticks: { color: SL[400], font: { size: 9 }, maxTicksLimit: 6 },
+            title: { display: true, text: xlabel, color: SL[400], font: { size: 9 }, padding: { top: 6 } },
+            ...(xMax !== undefined ? { max: xMax } : {}),
+        },
+        y: {
+            grid: { color: 'rgba(0,0,0,0.05)' }, border: { display: false },
+            ticks: { color: SL[400], font: { size: 9 }, maxTicksLimit: 5 },
+            title: { display: true, text: ylabel, color: SL[400], font: { size: 9 } },
+        },
+    },
+});
+
+// ── 분포 그래프 컴포넌트 ───────────────────────────────
+function DistCard({ canvasId, title, sub, xlabel, ylabel, datasets, panelWidth, xMax }: {
+    canvasId: string; title: string; sub: string;
+    xlabel: string; ylabel: string;
+    datasets: { label: string; color: string; data: { x: number; y: number }[] }[];
+    panelWidth: number;
+    xMax?: number;
+}) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const chartRef = useRef<Chart | null>(null);
+
+    useEffect(() => {
+        if (!canvasRef.current) return;
+        chartRef.current?.destroy();
+        chartRef.current = new Chart(canvasRef.current, {
+            type: 'line',
+            data: {
+                labels: datasets[0]?.data.map(d => d.x.toString()) ?? [],
+                datasets: datasets.map(ds => ({
+                    label: ds.label, data: ds.data.map(d => d.y),
+                    borderColor: ds.color, borderWidth: 1.5,
+                    pointRadius: 0, tension: 0.4, fill: false,
+                })),
+            },
+            options: chartOpts(xlabel, ylabel, xMax),
+        });
+        return () => { chartRef.current?.destroy(); chartRef.current = null; };
+    }, [datasets, xlabel, ylabel, xMax]);
+
+    useEffect(() => { chartRef.current?.resize(); }, [panelWidth]);
+
+    return (
+        <div style={{ background: colors.surface.white, borderRadius: '8px', padding: '14px 14px 10px', border: `0.5px solid ${SL[200]}` }}>
+            <div style={{ fontSize: '12px', fontWeight: typography.weight.medium, color: SL[700], marginBottom: '2px' }}>{title}</div>
+            <div style={{ fontSize: '10px', color: SL[400], marginBottom: '10px', lineHeight: '1.4' }}>{sub}</div>
+            <div style={{ position: 'relative', width: '100%', height: '150px', overflow: 'hidden' }}>
+                <canvas ref={canvasRef} id={canvasId} role="img" aria-label={title} />
+            </div>
+        </div>
+    );
+}
+
+// ── 메인 컴포넌트 ─────────────────────────────────────
 export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPanelProps) {
     const [width, setWidth] = useState(700);
-    const isResizing = { current: false };
+    const isResizing = useRef(false); // ← useRef로 수정
 
     const handleMouseDown = () => {
         isResizing.current = true;
@@ -71,6 +135,13 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
         window.addEventListener('mouseup', onMouseUp);
     };
 
+    useEffect(() => {
+        if (!isOpen) return;
+        const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [isOpen, onClose]);
+
     if (!isOpen || !data) return null;
 
     const leftScore = data.left.prediction.prediction_result.etch_score.value;
@@ -83,6 +154,73 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
     ];
 
     const delta = data.difference;
+
+    // ── 물리 분포 ────────────────────────────────────────
+    const leftBiasOk = (data.left.parameters.find(p => p.key === 'bias_power')?.value ?? 0) >= 100;
+    const rightBiasOk = (data.right.parameters.find(p => p.key === 'bias_power')?.value ?? 0) >= 100;
+    const allExcluded = !leftBiasOk && !rightBiasOk;
+    const excludedLabels = [...(!leftBiasOk ? ['조건 A'] : []), ...(!rightBiasOk ? ['조건 B'] : [])];
+
+    const LEFT_COLOR = '#6366f1';
+    const RIGHT_COLOR = '#f59e0b';
+
+    const toXY = (xs: number[], ys: number[]) => xs.map((x, i) => ({ x, y: ys[i] ?? 0 }));
+
+    const toDistData = (pd: typeof data.left.plasmaDistribution, key: 'cur' | 'iad' | 'ied') => {
+        if (!pd) return [];
+        if (key === 'cur') return toXY(pd.cur_x_values, pd.cur_y_values);
+        if (key === 'iad') return toXY(pd.iad_x_values, pd.iad_y_values);
+        return toXY(pd.ied_x_values, pd.ied_y_values);
+    };
+
+    // IED xMax 동적 계산
+    const avgEnergies = [
+        ...(leftBiasOk && data.left.plasmaDistribution ? [data.left.plasmaDistribution.avg_energy] : []),
+        ...(rightBiasOk && data.right.plasmaDistribution ? [data.right.plasmaDistribution.avg_energy] : []),
+    ];
+    const iedXMax = avgEnergies.length > 0
+        ? Math.max(100, Math.round((Math.max(...avgEnergies) * 2) / 10) * 10)
+        : 150;
+
+    const distGraphs = [
+        {
+            canvasId: 'cmp-dist-cur', title: 'Current Density (CUR)',
+            sub: 'RF 주기 내 전류밀도 시간 변화', xlabel: 'time (rf cycle)', ylabel: 'J (statA/cm²)',
+            datasets: [
+                ...(leftBiasOk && data.left.plasmaDistribution
+                    ? [{ label: '조건 A', color: LEFT_COLOR, data: toDistData(data.left.plasmaDistribution, 'cur') }]
+                    : []),
+                ...(rightBiasOk && data.right.plasmaDistribution
+                    ? [{ label: '조건 B', color: RIGHT_COLOR, data: toDistData(data.right.plasmaDistribution, 'cur') }]
+                    : []),
+            ],
+        },
+        {
+            canvasId: 'cmp-dist-iad', title: 'Ion Angle Distribution (IAD)',
+            sub: '이온 입사 각도 분포', xlabel: 'angle (°)', ylabel: 'IAD (a.u.)',
+            datasets: [
+                ...(leftBiasOk && data.left.plasmaDistribution
+                    ? [{ label: '조건 A', color: LEFT_COLOR, data: toDistData(data.left.plasmaDistribution, 'iad') }]
+                    : []),
+                ...(rightBiasOk && data.right.plasmaDistribution
+                    ? [{ label: '조건 B', color: RIGHT_COLOR, data: toDistData(data.right.plasmaDistribution, 'iad') }]
+                    : []),
+            ],
+        },
+        {
+            canvasId: 'cmp-dist-ied', title: 'Ion Energy Distribution (IED)',
+            sub: '이온 에너지 분포', xlabel: 'energy (eV)', ylabel: 'IED (a.u.)',
+            xMax: iedXMax,
+            datasets: [
+                ...(leftBiasOk && data.left.plasmaDistribution
+                    ? [{ label: '조건 A', color: LEFT_COLOR, data: toDistData(data.left.plasmaDistribution, 'ied') }]
+                    : []),
+                ...(rightBiasOk && data.right.plasmaDistribution
+                    ? [{ label: '조건 B', color: RIGHT_COLOR, data: toDistData(data.right.plasmaDistribution, 'ied') }]
+                    : []),
+            ],
+        },
+    ];
 
     return (
         <div style={{
@@ -123,23 +261,15 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                             <div key={label} style={{
                                 flex: 1, padding: '12px 18px',
                                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-                                backgroundColor: 'transparent',
-                                borderRadius: '6px',
-                                margin: '8px',
                             }}>
                                 {isWinner ? (
-                                    <span style={{ fontSize: '10px', color: PR[600] }}>
-                                        {label} · 높음
-                                    </span>
+                                    <span style={{ fontSize: '10px', color: PR[600] }}>{label} · 높음</span>
                                 ) : (
-                                    <span style={{ fontSize: '10px', color: SL[400] }}>
-                                        {label}
-                                    </span>
+                                    <span style={{ fontSize: '10px', color: SL[400] }}>{label}</span>
                                 )}
                                 <div style={{ position: 'relative', width: '110px', height: '110px' }}>
                                     <svg viewBox="0 0 120 120" width="110" height="110">
-                                        <circle cx="60" cy="60" r={RADIUS} fill="none"
-                                            stroke={SL[100]} strokeWidth="8" />
+                                        <circle cx="60" cy="60" r={RADIUS} fill="none" stroke={SL[100]} strokeWidth="8" />
                                         <circle cx="60" cy="60" r={RADIUS} fill="none"
                                             stroke={isWinner ? PR[500] : SL[300]}
                                             strokeWidth="8"
@@ -159,6 +289,9 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                             </div>
                         ))}
                     </div>
+                    <span style={{ fontSize: '10px', color: SL[400], textAlign: 'center', lineHeight: '1.5', display: 'block', paddingBottom: '12px' }}>
+                        * 실제 식각률(ER)이 아닌 공정 조건 간 상대 비교 지표입니다
+                    </span>
                 </div>
 
                 {/* 공정 조건 */}
@@ -236,47 +369,40 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                 </div>
 
                 {/* 물리 분포 */}
-                {(() => {
-                    const leftBiasOk = (data.left.parameters.find(p => p.key === 'bias_power')?.value ?? 0) >= 100;
-                    const rightBiasOk = (data.right.parameters.find(p => p.key === 'bias_power')?.value ?? 0) >= 100;
-                    const allExcluded = !leftBiasOk && !rightBiasOk;
-                    const excludedLabels = [...(!leftBiasOk ? ['조건 A'] : []), ...(!rightBiasOk ? ['조건 B'] : [])];
-
-                    return (
-                        <div style={{ padding: '16px 18px', borderBottom: `0.5px solid ${SL[100]}` }}>
-                            <span style={secLabel}>물리 분포</span>
-                            {excludedLabels.length > 0 && (
-                                <div style={{ padding: '8px', backgroundColor: SL[100], borderRadius: '8px', marginBottom: '10px' }}>
-                                    <span style={{ fontSize: '12px', color: SL[500], lineHeight: '2' }}>
-                                        ※ {excludedLabels.join(', ')} 조건은 Bias Power 100W 미만으로 데이터 신뢰도 확보를 위해 물리 분포 그래프를 제공하지 않습니다.
-                                    </span>
-                                </div>
-                            )}
-                            {allExcluded ? null : (
-                                <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
-                                    {leftBiasOk && (
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
-                                            <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: '#6366f1', display: 'inline-block' }} />
-                                            조건 A
-                                        </span>
-                                    )}
-                                    {rightBiasOk && (
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
-                                            <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: '#f59e0b', display: 'inline-block' }} />
-                                            조건 B
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                            {/* 그래프는 백엔드 데이터 연동 시 추가함됨 */}
+                <div style={{ padding: '16px 18px' }}>
+                    <span style={secLabel}>물리 분포</span>
+                    {excludedLabels.length > 0 && (
+                        <div style={{ padding: '8px', backgroundColor: SL[100], borderRadius: '8px', marginBottom: '10px' }}>
+                            <span style={{ fontSize: '12px', color: SL[500], lineHeight: '2' }}>
+                                ※ {excludedLabels.join(', ')} 조건은 Bias Power 100W 미만으로 데이터 신뢰도 확보를 위해 물리 분포 그래프를 제공하지 않습니다.
+                            </span>
                         </div>
-                    ); 
-                })()}
-
-                {/* 푸터 */}
-                <div style={{ padding: '8px 18px', fontSize: '10px', color: SL[400], lineHeight: '1.5', flexShrink: 0 }}>
-                    * Etch Score는 ion_flux · ion_energy 기반 상대 지표이며, 실제 Etch Rate와 다를 수 있습니다.
+                    )}
+                    {!allExcluded && (
+                        <>
+                            <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                                {leftBiasOk && (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
+                                        <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: LEFT_COLOR, display: 'inline-block' }} />
+                                        조건 A
+                                    </span>
+                                )}
+                                {rightBiasOk && (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
+                                        <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: RIGHT_COLOR, display: 'inline-block' }} />
+                                        조건 B
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {distGraphs.map(g => (
+                                    <DistCard key={g.canvasId} {...g} panelWidth={width} />
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
+
             </div>
         </div>
     );

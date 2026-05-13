@@ -148,8 +148,14 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
                   }}
                 />
                 <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>{field.unit}</span>
-                <button onClick={() => commitEdit(key)} style={{ fontSize: typography.size.xs, color: colors.primary[600], background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontWeight: typography.weight.medium }}>저장</button>
-                <button onClick={cancelEdit} style={{ fontSize: typography.size.xs, color: colors.slate[400], background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>취소</button>
+                <button
+                  onClick={() => commitEdit(key)}
+                  onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                  style={{ fontSize: typography.size.xs, color: colors.primary[600], background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontWeight: typography.weight.medium }}>저장</button>
+                <button
+                  onClick={cancelEdit}
+                  onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                  style={{ fontSize: typography.size.xs, color: colors.slate[400], background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>취소</button>
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -159,6 +165,7 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
                 </span>
                 {isLatest && !disableEdit && (
                   <button onClick={() => startEdit(key, field.value)} title="수정"
+                    onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: colors.slate[400], borderRadius: '4px', transition: 'color 0.15s' }}
                     onMouseEnter={e => (e.currentTarget.style.color = colors.slate[700])}
                     onMouseLeave={e => (e.currentTarget.style.color = colors.slate[400])}>
@@ -181,6 +188,7 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
               const currentValues = Object.fromEntries(entries.map(([k, v]) => [k, v.value]));
               onConfirm?.('PREDICTION', currentValues);
             }}
+            onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
             disabled={!isLatest}
             style={{
               fontSize: typography.size.xs, fontWeight: typography.weight.medium,
@@ -201,6 +209,7 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
               const currentValues = Object.fromEntries(entries.map(([k, v]) => [k, v.value]));
               onConfirm?.('OPTIMIZATION', currentValues);
             }}
+            onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
             disabled={!isLatest}
             style={{
               fontSize: typography.size.xs, fontWeight: typography.weight.medium,
@@ -351,6 +360,7 @@ function ParamErrorCard({ data, onReanalyze, isLatest }: {
       <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '10px', borderTop: `1px solid ${colors.slate[200]}` }}>
         <button
           onClick={handleReanalyze}
+          onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
           disabled={!allFilled}
           style={{
             fontSize: typography.size.xs,
@@ -537,6 +547,7 @@ function ComparisonConfirmCard({ data, onComparisonConfirm, isLatest }: {
       <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px', borderTop: `1px solid ${colors.slate[200]}` }}>
         <button
           onClick={handleConfirm}
+          onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
           disabled={!allFilled}
           style={{
             fontSize: typography.size.xs, fontWeight: typography.weight.medium,
@@ -614,6 +625,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
             </div>
             <button
               onClick={() => onOpenPanel?.(historyId)}
+              onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
               style={{
                 fontSize: typography.size.xs, fontWeight: typography.weight.medium,
                 color: colors.surface.white, backgroundColor: colors.primary[500],
@@ -636,8 +648,10 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
         const data = JSON.parse(content) as {
           historyId: string;
           label: string;
-          candidateCount: number;
+          currentScore: number;
+          bestScore: number;
         };
+        const diff = data.bestScore - data.currentScore;
         return (
           <div style={{
             border: `0.5px solid ${colors.slate[300]}`,
@@ -654,8 +668,8 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{
                 fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-                color: colors.secondary[500], backgroundColor: '#faf5ff',
-                padding: '2px 8px', borderRadius: '4px', border: '1px solid #e9d5ff',
+                color: colors.primary[600], backgroundColor: colors.primary[50],
+                padding: '2px 8px', borderRadius: '4px', border: `1px solid ${colors.primary[100]}`,
                 alignSelf: 'flex-start',
               }}>
                 최적화 완료
@@ -667,11 +681,19 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
                 {data.label}
               </span>
               <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>
-                후보 {data.candidateCount}개
+                Score {Number(data.currentScore.toFixed(1))} → 최고{' '}
+                <span style={{ fontWeight: typography.weight.medium, color: colors.slate[700] }}>
+                  {Number(data.bestScore.toFixed(1))}
+                </span>
+                {' '}
+                <span style={{ color: diff >= 0 ? '#059669' : '#dc2626', fontWeight: typography.weight.medium }}>
+                  ({diff >= 0 ? '+' : ''}{diff.toFixed(1)})
+                </span>
               </span>
             </div>
             <button
               onClick={() => onOpenPanel?.(data.historyId)}
+              onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
               style={{
                 fontSize: typography.size.xs, fontWeight: typography.weight.medium,
                 color: colors.surface.white, backgroundColor: colors.primary[500],
@@ -701,7 +723,13 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
 
     if (type === 'comparison-result') {
       try {
-        const data = JSON.parse(content);
+        const data = JSON.parse(content) as {
+          historyId: string;
+          leftLabel: string;
+          rightLabel: string;
+          etchScoreDelta: number;
+          etchScoreUnit: string;
+        };
         return (
           <div style={{
             border: `0.5px solid ${colors.slate[300]}`,
@@ -715,7 +743,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
             justifyContent: 'space-between',
             gap: '12px',
           }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{
                 fontSize: typography.size.xs, fontWeight: typography.weight.medium,
                 color: colors.primary[600], backgroundColor: colors.primary[50],
@@ -724,14 +752,21 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
               }}>
                 비교 완료
               </span>
+              <span style={{ fontSize: typography.size.xs, color: colors.slate[500] }}>
+                A — <span style={{ color: colors.slate[700], fontWeight: typography.weight.medium }}>{data.leftLabel}</span>
+              </span>
+              <span style={{ fontSize: typography.size.xs, color: colors.slate[500] }}>
+                B — <span style={{ color: colors.slate[700], fontWeight: typography.weight.medium }}>{data.rightLabel}</span>
+              </span>
               <span style={{ fontSize: typography.size.xs, color: colors.slate[400], marginTop: '2px' }}>
                 Etch Score 차이: <span style={{ fontWeight: typography.weight.medium, color: colors.slate[700] }}>
-                  {data.difference?.etchScoreDelta?.toFixed(2)}
-                </span> {data.difference?.etchScoreUnit}
+                  {data.etchScoreDelta >= 0 ? '+' : ''}{data.etchScoreDelta.toFixed(2)}
+                </span> {data.etchScoreUnit}
               </span>
             </div>
             <button
-              onClick={() => onOpenPanel?.('comparison')}
+              onClick={() => onOpenPanel?.(data.historyId)}
+              onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
               style={{
                 fontSize: typography.size.xs, fontWeight: typography.weight.medium,
                 color: colors.surface.white, backgroundColor: colors.primary[500],
@@ -764,6 +799,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
           </span>
           <button
             onClick={onRetry}
+            onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
             title="재시도"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',

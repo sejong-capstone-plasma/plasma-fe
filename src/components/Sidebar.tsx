@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { PredictionHistoryItem, OptimizationHistoryItem } from '../App';
+import type { PredictionHistoryItem, OptimizationHistoryItem, ComparisonHistoryItem } from '../App';
 import { fetchSessions } from '../api/analysis';
 import { colors, typography } from '../styles/tokens';
 import { SquarePen } from 'lucide-react';
@@ -19,6 +19,8 @@ interface SidebarProps {
   onSelectHistory?: (item: PredictionHistoryItem) => void;
   optimizationHistory?: OptimizationHistoryItem[];
   onSelectOptHistory?: (item: OptimizationHistoryItem) => void;
+  comparisonHistory?: ComparisonHistoryItem[];
+  onSelectCmpHistory?: (item: ComparisonHistoryItem) => void;
   activeSessionId?: string;
   sessionRefreshTrigger?: number;
 }
@@ -50,11 +52,15 @@ interface TabContentProps {
   onSelectHistory?: (item: PredictionHistoryItem) => void;
   optimizationHistory?: OptimizationHistoryItem[];
   onSelectOptHistory?: (item: OptimizationHistoryItem) => void;
+  comparisonHistory?: ComparisonHistoryItem[];
+  onSelectCmpHistory?: (item: ComparisonHistoryItem) => void;
 }
 
 const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLoading,
   predictionHistory = [], onSelectHistory,
-  optimizationHistory = [], onSelectOptHistory }: TabContentProps) => (
+  optimizationHistory = [], onSelectOptHistory,
+  comparisonHistory = [], onSelectCmpHistory
+}: TabContentProps) => (
   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
     {/* 탭 헤더 */}
     <div style={{
@@ -117,7 +123,7 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
     {/* 히스토리 목록 — 실제 데이터 */}
     {tab === 'history' && (
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-        {predictionHistory.length === 0 && optimizationHistory.length === 0 ? (
+        {predictionHistory.length === 0 && optimizationHistory.length === 0 && (comparisonHistory ?? []).length === 0 ? (
           <p style={{ fontSize: typography.size.xs, color: colors.slate[400], padding: '12px 18px' }}>
             분석 히스토리가 없습니다.
           </p>
@@ -125,13 +131,16 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
           [
             ...predictionHistory.map(item => ({ ...item, _type: 'prediction' as const })),
             ...(optimizationHistory ?? []).map(item => ({ ...item, _type: 'optimization' as const })),
+            ...(comparisonHistory ?? []).map(item => ({ ...item, _type: 'comparison' as const })),
           ]
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
             .map((item) => (
               <button
                 key={item.id}
                 onClick={() => {
-                  if (item._type === 'optimization') {
+                  if (item._type === 'comparison') {
+                    onSelectCmpHistory?.(item as ComparisonHistoryItem);
+                  } else if (item._type === 'optimization') {
                     onSelectOptHistory?.(item as OptimizationHistoryItem);
                   } else {
                     onSelectHistory?.(item as PredictionHistoryItem);
@@ -145,25 +154,47 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
                 >
                   <span style={{
                     fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-                    color: item._type === 'optimization' ? colors.secondary[500] : colors.primary[600],
-                    backgroundColor: item._type === 'optimization' ? '#faf5ff' : colors.primary[50],
-                    padding: '1px 6px', borderRadius: '3px',
-                    border: `1px solid ${item._type === 'optimization' ? '#e9d5ff' : colors.primary[100]}`,
+                    color: item._type === 'comparison' ? '#0369a1' :
+                      item._type === 'optimization' ? colors.secondary[500] : colors.primary[600],
+                    backgroundColor: item._type === 'comparison' ? '#e0f2fe' :
+                      item._type === 'optimization' ? '#faf5ff' : colors.primary[50],
+                    border: `1px solid ${item._type === 'comparison' ? '#bae6fd' :
+                      item._type === 'optimization' ? '#e9d5ff' : colors.primary[100]}`,
                     alignSelf: 'flex-start',
                   }}>
-                    {item._type === 'optimization' ? '최적화' : '예측'}
+                    {item._type === 'comparison' ? '비교' : item._type === 'optimization' ? '최적화' : '예측'}
                   </span>
                   <span style={{
                     fontSize: typography.size.sm, color: colors.slate[700],
                     fontWeight: typography.weight.medium,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
-                    {item.label}
+                    {item._type === 'comparison'
+                      ? `A — ${(item as ComparisonHistoryItem).leftLabel}`
+                      : item.label}
                   </span>
+                  {item._type === 'comparison' && (
+                    <span style={{
+                      fontSize: typography.size.sm, color: colors.slate[700],
+                      fontWeight: typography.weight.medium,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      B — {(item as ComparisonHistoryItem).rightLabel}
+                    </span>
+                  )}
                   <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>
-                    {item._type === 'optimization'
-                      ? `후보 ${(item as OptimizationHistoryItem).optimizationData.candidates.length}개`
-                      : `Score ${Number((item as PredictionHistoryItem).predictionData.prediction_result.etch_score.value.toFixed(1))}`
+                    {item._type === 'comparison'
+                      ? `Score 차 ${(item as ComparisonHistoryItem).comparisonData.difference.etchScoreDelta.toFixed(1)}`
+                      : item._type === 'optimization'
+                        ? (() => {
+                          const opt = item as OptimizationHistoryItem;
+                          if (opt.currentScore == null || opt.bestScore == null) {
+                            return `후보 ${opt.optimizationData.candidates.length}개`;
+                          }
+                          const diff = opt.bestScore - opt.currentScore;
+                          return `Score ${Number(opt.currentScore.toFixed(1))} → ${Number(opt.bestScore.toFixed(1))} (${diff >= 0 ? '+' : ''}${diff.toFixed(1)})`;
+                        })()
+                        : `Score ${Number((item as PredictionHistoryItem).predictionData.prediction_result.etch_score.value.toFixed(1))}`
                     }
                   </span>
                 </div>
@@ -178,7 +209,8 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
 // ── 메인 컴포넌트 ──────────────────────────────────────
 export default function Sidebar({ onNewChat, onSelectSession, predictionHistory = [],
   onSelectHistory, activeSessionId, sessionRefreshTrigger,
-  optimizationHistory = [], onSelectOptHistory }: SidebarProps) {
+  optimizationHistory = [], onSelectOptHistory,
+  comparisonHistory = [], onSelectCmpHistory }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<'chat' | 'history'>('chat');
@@ -236,6 +268,11 @@ export default function Sidebar({ onNewChat, onSelectSession, predictionHistory 
     onSelectOptHistory: (item: OptimizationHistoryItem) => {
       setActiveId(item.id);
       onSelectOptHistory?.(item);
+    },
+    comparisonHistory,
+    onSelectCmpHistory: (item: ComparisonHistoryItem) => {
+      setActiveId(item.id);
+      onSelectCmpHistory?.(item);
     },
   };
 

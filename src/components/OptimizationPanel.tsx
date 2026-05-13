@@ -352,7 +352,7 @@ export default function OptimizationPanel({ isOpen, onClose, data }: Optimizatio
                   { label: 'Source Power (W)', cur: current.process_params.source_power.value, cands: candidates.map(c => c.process_params.source_power.value) },
                   { label: 'Bias Power (W)', cur: current.process_params.bias_power.value, cands: candidates.map(c => c.process_params.bias_power.value) },
                   { label: 'Ion Flux', cur: formatValue(current.prediction_result.ion_flux.value), cands: candidates.map(c => formatValue(c.prediction_result.ion_flux.value)) },
-                  { label: 'Ion Energy (eV)', cur: current.prediction_result.ion_energy.value, cands: candidates.map(c => c.prediction_result.ion_energy.value) },
+                  { label: 'Ion Energy (eV)', cur: Number(current.prediction_result.ion_energy.value.toFixed(2)), cands: candidates.map(c => Number(c.prediction_result.ion_energy.value.toFixed(2))) },
                 ].map((row, ri) => (
                   <tr key={ri}>
                     <td style={{ fontSize: '11px', color: SL[500], padding: '7px 10px', borderBottom: `0.5px solid ${SL[100]}` }}>{row.label}</td>
