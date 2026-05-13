@@ -10,12 +10,13 @@ import {
   extractParams, resetSession, setSession,
   fetchSessionMessages, adaptResponse,
   revalidateParams, confirmValidation,
-  getCurrentSessionId
+  getCurrentSessionId,
 } from './api/analysis';
 import { colors, typography } from './styles/tokens';
 import type {
   ExtractValidationError, PredictionResult,
-  OptimizationResult, ComparisonResult, ConditionParams
+  OptimizationResult, ComparisonResult,
+  ConditionParams, PlasmaDistribution,
 } from './types/api';
 
 interface ProcessParams {
@@ -44,6 +45,14 @@ export interface PredictionHistoryItem {
   label: string;
   processParams: ProcessParams;
   predictionData: import('./types/api').PredictionResult;
+  plasmaDistribution: import('./types/api').PlasmaDistribution | null;
+}
+
+export interface OptimizationHistoryItem {
+  id: string;
+  createdAt: Date;
+  label: string;
+  optimizationData: import('./types/api').OptimizationResult;
 }
 
 interface Message {
@@ -69,12 +78,14 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [activePanelType, setActivePanelType] = useState<'prediction' | 'optimization' | 'comparison' | null>(null);
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null);
-  const [optimizationData] = useState<OptimizationResult | null>(null);
+  const [optimizationData, setOptimizationData] = useState<OptimizationResult | null>(null);
   const [comparisonData, setComparisonData] = useState<ComparisonResult | null>(null);
   const [processParams, setProcessParams] = useState<ProcessParams | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryItem[]>([]);
+  const [optimizationHistory, setOptimizationHistory] = useState<OptimizationHistoryItem[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(getCurrentSessionId());
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
+  const [plasmaDistribution, setPlasmaDistribution] = useState<PlasmaDistribution | null>(null);
 
   const isPredictionPanelOpen = activePanelType === 'prediction';
   const isOptPanelOpen = activePanelType === 'optimization';
@@ -279,9 +290,32 @@ export default function App() {
     }
 
     if (taskType === 'OPTIMIZATION') {
+      if (!confirmRes.optimization) {
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: '최적화 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 
+          type: 'error-retry' }]);
+        return;
+      }
+      const optData = confirmRes.optimization;
+      setOptimizationData(optData);
+
+      const params = confirmRes.validation?.parameters;
+      const getVal = (key: string) => params?.find(p => p.key === key)?.value ?? 0;
+      const label = params
+        ? `P ${getVal('pressure')}mTorr / SP ${getVal('source_power')}W / BP ${getVal('bias_power')}W`
+        : '최적화 결과';
+
+      const histId = `opt-${Date.now()}`;
+      setOptimizationHistory(prev => [{ id: histId, createdAt: new Date(), label, optimizationData: optData }, ...prev]);
+
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '최적화 분석이 완료되었습니다.',
+        content: JSON.stringify({
+          historyId: histId,
+          label,
+          candidateCount: optData.candidates.length,
+        }),
         type: 'optimization-result',
       }]);
       setActivePanelType('optimization');
@@ -335,16 +369,21 @@ export default function App() {
         label: params ? `P ${params.pressure}mTorr / SP ${params.source_power}W / BP ${params.bias_power}W` : '예측 결과',
         processParams: params ?? { pressure: 0, source_power: 0, bias_power: 0 },
         predictionData: pred,
+        plasmaDistribution: confirmRes.plasmaDistribution ?? null,
       };
       setPredictionHistory(prev => [historyItem, ...prev]);
 
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: JSON.stringify({ historyId, etch_score: pred.prediction_result.etch_score.value, label: historyItem.label }),
+        content: JSON.stringify({ 
+          historyId, 
+          etch_score: pred.prediction_result.etch_score.value, 
+          label: historyItem.label }),
         type: 'prediction-result',
       }]);
 
       setPredictionData(pred);
+      setPlasmaDistribution(confirmRes.plasmaDistribution ?? null);
       if (params) setProcessParams(params);
       setActivePanelType('prediction');
     }
@@ -509,6 +548,7 @@ export default function App() {
             label: `P ${params.pressure}mTorr / SP ${params.source_power}W / BP ${params.bias_power}W`,
             processParams: params,
             predictionData: pred,
+            plasmaDistribution: null,
           };
           restoredHistory.push(historyItem);
           restored.push({
@@ -528,11 +568,17 @@ export default function App() {
       <div className="flex h-screen bg-white text-slate-900 overflow-hidden font-sans">
         <Sidebar
           predictionHistory={predictionHistory}
+          optimizationHistory={optimizationHistory} 
           activeSessionId={activeSessionId}
           onSelectHistory={(item) => {
             setPredictionData(item.predictionData);
             setProcessParams(item.processParams);
+            setPlasmaDistribution(item.plasmaDistribution ?? null);
             setActivePanelType('prediction');
+          }}
+          onSelectOptHistory={(item) => {                     
+            setOptimizationData(item.optimizationData);
+            setActivePanelType('optimization');
           }}
           onNewChat={() => {
             setMessages([]);
@@ -581,18 +627,19 @@ export default function App() {
                 onRetry={handleRetry}
                 onComparisonConfirm={handleComparisonConfirm}
                 onOpenPanel={(historyId) => {
-                  if (historyId === 'optimization') {
-                    setActivePanelType('optimization');
-                    return;
-                  }
-                  if (historyId === 'comparison') {   
-                    setActivePanelType('comparison');
+                  if (historyId.startsWith('opt-')) {
+                    const item = optimizationHistory.find(h => h.id === historyId);
+                    if (item) {
+                      setOptimizationData(item.optimizationData);
+                      setActivePanelType('optimization');
+                    }
                     return;
                   }
                   const item = predictionHistory.find(h => h.id === historyId);
                   if (item) {
                     setPredictionData(item.predictionData);
                     setProcessParams(item.processParams);
+                    setPlasmaDistribution(item.plasmaDistribution ?? null);
                     setActivePanelType('prediction');
                   }
                 }}
@@ -613,6 +660,7 @@ export default function App() {
           onClose={() => setActivePanelType(null)}
           data={predictionData}
           processParams={processParams}
+          plasmaDistribution={plasmaDistribution}
         />
         <OptimizationPanel
           isOpen={isOptPanelOpen}

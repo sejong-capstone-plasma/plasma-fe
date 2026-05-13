@@ -69,15 +69,25 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
 
+
   const startEdit = (key: string, currentValue: number) => {
     if (!isLatest) return;
     setEditingField(key);
     setEditValue(String(currentValue));
   };
 
+  const PARAM_MIN: Record<string, number> = { pressure: 2, source_power: 100, bias_power: 0 };
+  const PARAM_MAX: Record<string, number> = { pressure: 10, source_power: 500, bias_power: 1000 };
+
+  const isInRange = (key: string, val: number) => {
+    if (PARAM_MIN[key] !== undefined && val < PARAM_MIN[key]) return false;
+    if (PARAM_MAX[key] !== undefined && val > PARAM_MAX[key]) return false;
+    return true;
+  };
+
   const commitEdit = (key: string) => {
     const parsed = parseFloat(editValue);
-    if (!isNaN(parsed)) {
+    if (!isNaN(parsed) && isInRange(key, parsed)) {
       setParams(prev => ({ ...prev, [key]: { ...prev[key], value: parsed } }));
     }
     setEditingField(null);
@@ -130,7 +140,10 @@ function ParamConfirmCard({ data, onConfirm, isLatest, disableEdit = false }: {
                   style={{
                     width: '72px', fontSize: typography.size.sm,
                     fontWeight: typography.weight.medium, color: colors.slate[900],
-                    border: `1px solid ${colors.primary[400]}`, borderRadius: '5px',
+                    border: `1px solid ${!isNaN(parseFloat(editValue)) && !isInRange(key, parseFloat(editValue))
+                      ? colors.semantic.error
+                      : colors.primary[400]}`,
+                    borderRadius: '5px',
                     padding: '3px 7px', outline: 'none', backgroundColor: colors.surface.white, textAlign: 'right',
                   }}
                 />
@@ -400,9 +413,9 @@ function ComparisonConfirmCard({ data, onComparisonConfirm, isLatest }: {
   const handleConfirm = () => {
     if (!allFilled) return;
     const toConditionParams = (params: Record<string, { value: string; unit: string; status: string }>): ConditionParams => ({
-      pressure:     { value: parseFloat(params.pressure.value),     unit: params.pressure.unit },
+      pressure: { value: parseFloat(params.pressure.value), unit: params.pressure.unit },
       source_power: { value: parseFloat(params.source_power.value), unit: params.source_power.unit },
-      bias_power:   { value: parseFloat(params.bias_power.value),   unit: params.bias_power.unit },
+      bias_power: { value: parseFloat(params.bias_power.value), unit: params.bias_power.unit },
     });
     onComparisonConfirm?.(toConditionParams(paramsA), toConditionParams(paramsB));
   };
@@ -543,8 +556,8 @@ function ComparisonConfirmCard({ data, onComparisonConfirm, isLatest }: {
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────
-export default function ChatTypes({ role, content, isTyping, isLastAssistant, 
-  isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText, 
+export default function ChatTypes({ role, content, isTyping, isLastAssistant,
+  isLatest = true, type = 'default', onConfirm, onReanalyze, onRetry, loadingText,
   disableEdit, onOpenPanel, onComparisonConfirm }: ChatProps) {
   const isUser = role === 'user';
   const isWaiting = isTyping && content === '';
@@ -619,44 +632,62 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
       }
     }
     if (type === 'optimization-result') {
-      return (
-        <div style={{
-          border: `0.5px solid ${colors.slate[300]}`,
-          borderRadius: '10px',
-          padding: '12px 14px',
-          backgroundColor: colors.surface.card,
-          maxWidth: '400px',
-          minWidth: '280px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{
-              fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-              color: colors.primary[600], backgroundColor: colors.primary[50],
-              padding: '2px 8px', borderRadius: '4px', border: `1px solid ${colors.primary[100]}`,
-              alignSelf: 'flex-start',
-            }}>
-              최적화 완료
-            </span>
+      try {
+        const data = JSON.parse(content) as {
+          historyId: string;
+          label: string;
+          candidateCount: number;
+        };
+        return (
+          <div style={{
+            border: `0.5px solid ${colors.slate[300]}`,
+            borderRadius: '10px',
+            padding: '12px 14px',
+            backgroundColor: colors.surface.card,
+            maxWidth: '400px',
+            minWidth: '280px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{
+                fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                color: colors.secondary[500], backgroundColor: '#faf5ff',
+                padding: '2px 8px', borderRadius: '4px', border: '1px solid #e9d5ff',
+                alignSelf: 'flex-start',
+              }}>
+                최적화 완료
+              </span>
+              <span style={{
+                fontSize: typography.size.sm, fontWeight: typography.weight.medium,
+                color: colors.slate[700],
+              }}>
+                {data.label}
+              </span>
+              <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>
+                후보 {data.candidateCount}개
+              </span>
+            </div>
+            <button
+              onClick={() => onOpenPanel?.(data.historyId)}
+              style={{
+                fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                color: colors.surface.white, backgroundColor: colors.primary[500],
+                border: 'none', borderRadius: '6px', padding: '6px 14px',
+                cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = colors.primary[600])}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = colors.primary[500])}
+            >
+              결과 보기
+            </button>
           </div>
-          <button
-            onClick={() => onOpenPanel?.('optimization')}
-            style={{
-              fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-              color: colors.surface.white, backgroundColor: colors.primary[500],
-              border: 'none', borderRadius: '6px', padding: '6px 14px',
-              cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.15s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = colors.primary[600])}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = colors.primary[500])}
-          >
-            결과 보기
-          </button>
-        </div>
-      );
+        );
+      } catch {
+        return null;
+      }
     }
 
     if (type === 'comparison-confirm') {

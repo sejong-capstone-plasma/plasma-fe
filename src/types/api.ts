@@ -113,7 +113,22 @@ export interface PredictionResult {
     cur: { x: number; y: number }[]; 
     iad: { x: number; y: number }[]; 
     ied: { x: number; y: number }[]; 
-  };
+  } | null;
+}
+
+export interface PlasmaDistribution {
+  matched_pressure:     number;
+  matched_source_power: number;
+  matched_bias_power:   number;
+  ion_flux:             number;
+  avg_energy:           number;
+  ied_energy_min:       number;
+  ied_x_values:         number[];
+  ied_y_values:         number[];
+  iad_x_values:         number[];
+  iad_y_values:         number[];
+  cur_x_values:         number[];
+  cur_y_values:         number[];
 }
 
 export interface ConditionParams {
@@ -134,16 +149,12 @@ export interface OptimizationCandidate {
     ion_energy: { value: number; unit: string };
     etch_score: { value: number; unit: string };
   };
-  graphs: {
-    cur: { x: number; y: number }[];
-    iad: { x: number; y: number }[];
-    ied: { x: number; y: number }[];
-  };
   parameter_impact: {
     pressure:     { x: number; y: number }[];
     source_power: { x: number; y: number }[];
     bias_power:   { x: number; y: number }[];
   };
+  plasmaDistribution: PlasmaDistribution | null;
 }
 
 export interface OptimizationCurrent {
@@ -157,11 +168,7 @@ export interface OptimizationCurrent {
     ion_energy: { value: number; unit: string };
     etch_score: { value: number; unit: string };
   };
-  graphs: {
-    cur: { x: number; y: number }[];
-    iad: { x: number; y: number }[];
-    ied: { x: number; y: number }[];
-  };
+  plasmaDistribution: PlasmaDistribution | null; 
 }
 
 export interface OptimizationResult {
@@ -174,6 +181,7 @@ export interface ConfirmResponse {
   prediction:      PredictionResult | null;
   optimization:    OptimizationResult | null;  
   comparison:      ComparisonResult | null;
+  plasmaDistribution: PlasmaDistribution | null;
   question:        unknown | null;
   executionError:  string | null;
   predictionError: string | null;
@@ -190,6 +198,7 @@ export interface ComparisonSide {
       etch_score: { value: number; unit: string };
     };
   };
+  plasmaDistribution: PlasmaDistribution | null; 
 }
 
 export interface ComparisonResult {

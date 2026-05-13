@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { PredictionHistoryItem } from '../App';
+import type { PredictionHistoryItem, OptimizationHistoryItem } from '../App';
 import { fetchSessions } from '../api/analysis';
 import { colors, typography } from '../styles/tokens';
 import { SquarePen } from 'lucide-react';
@@ -17,6 +17,8 @@ interface SidebarProps {
   onSelectSession?: (sessionId: string) => void;
   predictionHistory?: PredictionHistoryItem[];
   onSelectHistory?: (item: PredictionHistoryItem) => void;
+  optimizationHistory?: OptimizationHistoryItem[];
+  onSelectOptHistory?: (item: OptimizationHistoryItem) => void;
   activeSessionId?: string;
   sessionRefreshTrigger?: number;
 }
@@ -46,9 +48,13 @@ interface TabContentProps {
   sessionsLoading: boolean;
   predictionHistory?: PredictionHistoryItem[];
   onSelectHistory?: (item: PredictionHistoryItem) => void;
+  optimizationHistory?: OptimizationHistoryItem[];
+  onSelectOptHistory?: (item: OptimizationHistoryItem) => void;
 }
 
-const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLoading, predictionHistory = [], onSelectHistory }: TabContentProps) => (
+const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLoading,
+  predictionHistory = [], onSelectHistory,
+  optimizationHistory = [], onSelectOptHistory }: TabContentProps) => (
   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
     {/* 탭 헤더 */}
     <div style={{
@@ -111,43 +117,58 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
     {/* 히스토리 목록 — 실제 데이터 */}
     {tab === 'history' && (
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-        {predictionHistory.length === 0 ? (
+        {predictionHistory.length === 0 && optimizationHistory.length === 0 ? (
           <p style={{ fontSize: typography.size.xs, color: colors.slate[400], padding: '12px 18px' }}>
             분석 히스토리가 없습니다.
           </p>
         ) : (
-          predictionHistory.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onSelectHistory?.(item)}
-              style={{ width: '100%', padding: '1px 8px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
-            >
-              <div
-                className={`hover:bg-slate-200 transition-colors rounded-lg ${activeId === item.id ? 'bg-slate-200' : ''}`}
-                style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 10px' }}
+          [
+            ...predictionHistory.map(item => ({ ...item, _type: 'prediction' as const })),
+            ...(optimizationHistory ?? []).map(item => ({ ...item, _type: 'optimization' as const })),
+          ]
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (item._type === 'optimization') {
+                    onSelectOptHistory?.(item as OptimizationHistoryItem);
+                  } else {
+                    onSelectHistory?.(item as PredictionHistoryItem);
+                  }
+                }}
+                style={{ width: '100%', padding: '1px 8px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
               >
-                <span style={{
-                  fontSize: typography.size.xs, fontWeight: typography.weight.medium,
-                  color: colors.primary[600], backgroundColor: colors.primary[50],
-                  padding: '1px 6px', borderRadius: '3px',
-                  border: `1px solid ${colors.primary[100]}`,
-                  alignSelf: 'flex-start',
-                }}>
-                  예측
-                </span>
-                <span style={{
-                  fontSize: typography.size.sm, color: colors.slate[700],
-                  fontWeight: typography.weight.medium,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {item.label}
-                </span>
-                <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>
-                  Score {Number(item.predictionData.prediction_result.etch_score.value.toFixed(1))}
-                </span>
-              </div>
-            </button>
-          ))
+                <div
+                  className={`hover:bg-slate-200 transition-colors rounded-lg ${activeId === item.id ? 'bg-slate-200' : ''}`}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 10px' }}
+                >
+                  <span style={{
+                    fontSize: typography.size.xs, fontWeight: typography.weight.medium,
+                    color: item._type === 'optimization' ? colors.secondary[500] : colors.primary[600],
+                    backgroundColor: item._type === 'optimization' ? '#faf5ff' : colors.primary[50],
+                    padding: '1px 6px', borderRadius: '3px',
+                    border: `1px solid ${item._type === 'optimization' ? '#e9d5ff' : colors.primary[100]}`,
+                    alignSelf: 'flex-start',
+                  }}>
+                    {item._type === 'optimization' ? '최적화' : '예측'}
+                  </span>
+                  <span style={{
+                    fontSize: typography.size.sm, color: colors.slate[700],
+                    fontWeight: typography.weight.medium,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {item.label}
+                  </span>
+                  <span style={{ fontSize: typography.size.xs, color: colors.slate[400] }}>
+                    {item._type === 'optimization'
+                      ? `후보 ${(item as OptimizationHistoryItem).optimizationData.candidates.length}개`
+                      : `Score ${Number((item as PredictionHistoryItem).predictionData.prediction_result.etch_score.value.toFixed(1))}`
+                    }
+                  </span>
+                </div>
+              </button>
+            ))
         )}
       </div>
     )}
@@ -155,8 +176,9 @@ const TabContent = ({ tab, activeId, onTabChange, onSelect, sessions, sessionsLo
 );
 
 // ── 메인 컴포넌트 ──────────────────────────────────────
-export default function Sidebar({ onNewChat, onSelectSession, predictionHistory = [], 
-  onSelectHistory, activeSessionId, sessionRefreshTrigger }: SidebarProps) {
+export default function Sidebar({ onNewChat, onSelectSession, predictionHistory = [],
+  onSelectHistory, activeSessionId, sessionRefreshTrigger,
+  optimizationHistory = [], onSelectOptHistory }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<'chat' | 'history'>('chat');
@@ -210,6 +232,11 @@ export default function Sidebar({ onNewChat, onSelectSession, predictionHistory 
       setActiveId(item.id);
       onSelectHistory?.(item);
     },
+    optimizationHistory,
+    onSelectOptHistory: (item: OptimizationHistoryItem) => {
+      setActiveId(item.id);
+      onSelectOptHistory?.(item);
+    },
   };
 
   // ── 오버레이 모드 (모바일) ──
@@ -243,7 +270,7 @@ export default function Sidebar({ onNewChat, onSelectSession, predictionHistory 
           display: 'flex', flexDirection: 'column',
           transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease',
-          
+
         }}>
           <div style={{ display: 'flex', alignItems: 'center', padding: '12px 12px' }}>
             <div

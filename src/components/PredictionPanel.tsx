@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { colors, typography } from '../styles/tokens';
-import type { PredictionResult } from '../types/api';
+import type { PredictionResult,  PlasmaDistribution } from '../types/api';
 
 Chart.register(...registerables);
 
@@ -16,6 +16,7 @@ interface PredictionPanelProps {
   onClose: () => void;
   data: PredictionResult | null;
   processParams: ProcessParams | null;
+  plasmaDistribution: PlasmaDistribution | null;
 }
 
 const RADIUS = 50;
@@ -31,38 +32,16 @@ function formatValue(value: number): string {
   return Number(value.toFixed(3)).toString();
 }
 
-// ── 목업 데이터 (실제 K-PLASMA 데이터 형태 기반) ──────
-const MOCK_IAD = Array.from({ length: 41 }, (_, i) => {
-  const x = -10 + i * 0.5;
-  const y = Math.exp(-0.5 * Math.pow(x / 1.8, 2));
-  return { x, y };
-});
-
-const MOCK_CUR = Array.from({ length: 60 }, (_, i) => {
-  const x = parseFloat((i / 60).toFixed(3));
-  const y = Math.sin(2 * Math.PI * x) * Math.exp(-x * 0.5) * 8e5
-    + Math.sin(4 * Math.PI * x) * 1.5e5;
-  return { x, y };
-});
-
-const MOCK_IED = Array.from({ length: 60 }, (_, i) => {
-  const x = 10 + i * 12;
-  const y = Math.exp(-0.5 * Math.pow((x - 60) / 20, 2)) * 0.8
-    + Math.exp(-0.5 * Math.pow((x - 400) / 80, 2)) * 0.3
-    + Math.exp(-0.5 * Math.pow((x - 680) / 15, 2)) * 0.15;
-  return { x, y: Math.max(0, y) };
-});
-
 const SL = colors.slate;
 const PR = colors.primary;
 
 const secLabel: React.CSSProperties = {
-  fontSize: '10px', 
+  fontSize: '10px',
   fontWeight: typography.weight.medium,
-  color: SL[400], 
+  color: SL[400],
   letterSpacing: '0.06em',
-  textTransform: 'uppercase', 
-  display: 'block', 
+  textTransform: 'uppercase',
+  display: 'block',
   marginBottom: '8px',
 };
 
@@ -158,9 +137,20 @@ function GraphCard({ title, sub, data, color, xlabel, ylabel, panelWidth }: {
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────
-export default function PredictionPanel({ isOpen, onClose, data, processParams }: PredictionPanelProps) {
+export default function PredictionPanel({ isOpen, onClose, data, processParams, plasmaDistribution  }: PredictionPanelProps) {
   const [width, setWidth] = useState(700);
   const isResizing = useRef(false);
+  // plasmaDistribution 데이터로 변환
+const toXY = (xs: number[], ys: number[]) =>
+  xs.map((x, i) => ({ x, y: ys[i] ?? 0 }));
+
+const plasma = plasmaDistribution;
+
+const GRAPHS = plasma ? [
+  { id: 'cur', title: 'Current Density (CUR)', sub: 'RF 주기 내 전류밀도 시간 변화', data: toXY(plasma.cur_x_values, plasma.cur_y_values), color: '#6366f1', xlabel: 'time (rf cycle)', ylabel: 'J (statA/cm²)' },
+  { id: 'iad', title: 'Ion Angle Dist. (IAD)', sub: '이온 입사 각도 분포', data: toXY(plasma.iad_x_values, plasma.iad_y_values), color: '#6366f1', xlabel: 'angle (°)', ylabel: 'IAD (a.u.)' },
+  { id: 'ied', title: 'Ion Energy Dist. (IED)', sub: '이온 에너지 분포', data: toXY(plasma.ied_x_values, plasma.ied_y_values), color: '#6366f1', xlabel: 'energy (eV)', ylabel: 'IED (a.u.)' },
+] : null;
 
   const handleMouseDown = () => {
     isResizing.current = true;
@@ -199,12 +189,6 @@ export default function PredictionPanel({ isOpen, onClose, data, processParams }
   const PLASMA = [
     { key: 'ion_flux' as const, label: 'Ion Flux', unit: prediction?.ion_flux?.unit ?? 'cm⁻² s⁻¹' },
     { key: 'ion_energy' as const, label: 'Ion Energy', unit: prediction?.ion_energy?.unit ?? 'eV' },
-  ];
-
-  const GRAPHS = [
-    { id: 'cur', title: 'Current Density (CUR)', sub: 'RF 주기 내 전류밀도 시간 변화', data: MOCK_CUR, color: '#6366f1', xlabel: 'time (rf cycle)', ylabel: 'J (statA/cm²)' },
-    { id: 'iad', title: 'Ion Angle Dist. (IAD)', sub: '이온 입사 각도 분포', data: MOCK_IAD, color: '#6366f1', xlabel: 'angle (°)', ylabel: 'IAD (a.u.)' },
-    { id: 'ied', title: 'Ion Energy Dist. (IED)', sub: '이온 에너지 분포', data: MOCK_IED, color: '#6366f1', xlabel: 'energy (eV)', ylabel: 'IED (a.u.)' },
   ];
 
   return (
@@ -307,9 +291,25 @@ export default function PredictionPanel({ isOpen, onClose, data, processParams }
         {/* 하단: 물리 분포 그래프 */}
         <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <span style={secLabel}>물리 분포</span>
-          {GRAPHS.map(g => (
-            <GraphCard key={g.id} {...g} panelWidth={width} />
-          ))}
+          {(processParams?.bias_power ?? 0) < 100 ? (
+            <div style={{
+              padding: '8px',
+              backgroundColor: SL[100],
+              borderRadius: '8px'
+            }}>
+              <span style={{ fontSize: '12px', color: SL[500], lineHeight: '2' }}>
+              ※ Bias Power 100W 미만 구간은 데이터 신뢰도 확보를 위해 물리 분포 그래프를 제공하지 않습니다.
+              </span>
+            </div>
+          ) : GRAPHS ? (
+            GRAPHS.map(g => <GraphCard key={g.id} {...g} panelWidth={width} />)
+          ) : (
+            <div style={{ padding: '8px', backgroundColor: SL[100], borderRadius: '8px' }}>
+            <span style={{ fontSize: '12px', color: SL[500] }}>
+              물리 분포 데이터를 불러오지 못했습니다.
+            </span>
+          </div>
+          )}
         </div>
 
         {/* 푸터 */}

@@ -53,7 +53,7 @@ const rowCard: React.CSSProperties = {
 };
 
 export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPanelProps) {
-    const [width, setWidth] = useState(600);
+    const [width, setWidth] = useState(700);
     const isResizing = { current: false };
 
     const handleMouseDown = () => {
@@ -128,11 +128,13 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                                 margin: '8px',
                             }}>
                                 {isWinner ? (
-                                    <span style={{ fontSize: '10px', color: PR[600], backgroundColor: PR[50], padding: '1px 7px', borderRadius: '4px', border: `1px solid ${PR[100]}` }}>
+                                    <span style={{ fontSize: '10px', color: PR[600] }}>
                                         {label} · 높음
                                     </span>
                                 ) : (
-                                    <span style={{ fontSize: '10px', color: SL[400] }}>{label}</span>
+                                    <span style={{ fontSize: '10px', color: SL[400] }}>
+                                        {label}
+                                    </span>
                                 )}
                                 <div style={{ position: 'relative', width: '110px', height: '110px' }}>
                                     <svg viewBox="0 0 120 120" width="110" height="110">
@@ -232,6 +234,44 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                         ))}
                     </div>
                 </div>
+
+                {/* 물리 분포 */}
+                {(() => {
+                    const leftBiasOk = (data.left.parameters.find(p => p.key === 'bias_power')?.value ?? 0) >= 100;
+                    const rightBiasOk = (data.right.parameters.find(p => p.key === 'bias_power')?.value ?? 0) >= 100;
+                    const allExcluded = !leftBiasOk && !rightBiasOk;
+                    const excludedLabels = [...(!leftBiasOk ? ['조건 A'] : []), ...(!rightBiasOk ? ['조건 B'] : [])];
+
+                    return (
+                        <div style={{ padding: '16px 18px', borderBottom: `0.5px solid ${SL[100]}` }}>
+                            <span style={secLabel}>물리 분포</span>
+                            {excludedLabels.length > 0 && (
+                                <div style={{ padding: '8px', backgroundColor: SL[100], borderRadius: '8px', marginBottom: '10px' }}>
+                                    <span style={{ fontSize: '12px', color: SL[500], lineHeight: '2' }}>
+                                        ※ {excludedLabels.join(', ')} 조건은 Bias Power 100W 미만으로 데이터 신뢰도 확보를 위해 물리 분포 그래프를 제공하지 않습니다.
+                                    </span>
+                                </div>
+                            )}
+                            {allExcluded ? null : (
+                                <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
+                                    {leftBiasOk && (
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
+                                            <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: '#6366f1', display: 'inline-block' }} />
+                                            조건 A
+                                        </span>
+                                    )}
+                                    {rightBiasOk && (
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
+                                            <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: '#f59e0b', display: 'inline-block' }} />
+                                            조건 B
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            {/* 그래프는 백엔드 데이터 연동 시 추가함됨 */}
+                        </div>
+                    ); 
+                })()}
 
                 {/* 푸터 */}
                 <div style={{ padding: '8px 18px', fontSize: '10px', color: SL[400], lineHeight: '1.5', flexShrink: 0 }}>

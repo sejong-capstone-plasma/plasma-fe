@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { colors, typography } from '../styles/tokens';
-import type { OptimizationResult } from '../types/api';
+import type { OptimizationResult, PlasmaDistribution } from '../types/api';
 
 Chart.register(...registerables);
 
@@ -21,87 +21,6 @@ const PR = colors.primary;
 
 const CANDIDATE_COLORS = ['#6366f1', '#f59e0b', '#10b981'];
 const CURRENT_COLOR = '#94a3b8';
-
-// ── 목업 데이터 ───────────────────────────────────────
-const MOCK_DATA: OptimizationResult = {
-  current: {
-    process_params: {
-      pressure: { value: 8, unit: 'mTorr' },
-      source_power: { value: 450, unit: 'W' },
-      bias_power: { value: 80, unit: 'W' },
-    },
-    prediction_result: {
-      ion_flux: { value: 6.15e16, unit: 'cm⁻² s⁻¹' },
-      ion_energy: { value: 55.6, unit: 'eV' },
-      etch_score: { value: 46.7, unit: 'point' },
-    },
-
-    graphs: {
-      cur: Array.from({ length: 60 }, (_, i) => ({ x: +(i / 60).toFixed(2), y: +(Math.sin(2 * Math.PI * (i / 60)) * Math.exp(-(i / 60) * 0.5) * 8e5 + Math.sin(4 * Math.PI * (i / 60)) * 1.5e5).toFixed(0) })),
-      iad: Array.from({ length: 41 }, (_, i) => ({ x: +(-10 + i * 0.5).toFixed(1), y: +Math.exp(-0.5 * Math.pow((-10 + i * 0.5) / 1.8, 2)).toFixed(3) })),
-      ied: Array.from({ length: 60 }, (_, i) => ({ x: +(10 + i * 12).toFixed(0), y: +(Math.exp(-0.5 * Math.pow((10 + i * 12 - 60) / 20, 2)) * 0.8 + Math.exp(-0.5 * Math.pow((10 + i * 12 - 350) / 80, 2)) * 0.25).toFixed(3) })),
-    },
-  },
-  candidates: [
-    {
-      candidate_id: 1,
-      process_params: { pressure: { value: 6, unit: 'mTorr' }, source_power: { value: 500, unit: 'W' }, bias_power: { value: 120, unit: 'W' } },
-      prediction_result: {
-        ion_flux: { value: 7.2e16, unit: 'cm⁻² s⁻¹' },
-        ion_energy: { value: 72.1, unit: 'eV' },
-        etch_score: { value: 46.7, unit: 'point' },
-      },
-      graphs: {
-        cur: Array.from({ length: 60 }, (_, i) => ({ x: +(i / 60).toFixed(2), y: +(Math.sin(2 * Math.PI * (i / 60)) * Math.exp(-(i / 60) * 0.5) * 9.5e5 + Math.sin(4 * Math.PI * (i / 60)) * 1.8e5).toFixed(0) })),
-        iad: Array.from({ length: 41 }, (_, i) => ({ x: +(-10 + i * 0.5).toFixed(1), y: +Math.exp(-0.5 * Math.pow((-10 + i * 0.5) / 1.5, 2)).toFixed(3) })),
-        ied: Array.from({ length: 60 }, (_, i) => ({ x: +(10 + i * 12).toFixed(0), y: +(Math.exp(-0.5 * Math.pow((10 + i * 12 - 80) / 20, 2)) * 0.8 + Math.exp(-0.5 * Math.pow((10 + i * 12 - 420) / 80, 2)) * 0.25).toFixed(3) })),
-      },
-      parameter_impact: {
-        pressure:     Array.from({ length: 50 }, (_, i) => ({ x: +(2 + i * 0.16).toFixed(2), y: +(78.3 - i * 0.3).toFixed(1) })),
-        source_power: Array.from({ length: 50 }, (_, i) => ({ x: 100 + i * 8,                y: +(60 + i * 0.4).toFixed(1) })),
-        bias_power:   Array.from({ length: 50 }, (_, i) => ({ x: i * 20,                      y: +(50 + i * 0.6).toFixed(1) })),
-      },
-    },
-    {
-      candidate_id: 2,
-      process_params: { pressure: { value: 5, unit: 'mTorr' }, source_power: { value: 480, unit: 'W' }, bias_power: { value: 150, unit: 'W' } },
-      prediction_result: { 
-        ion_flux: { value: 6.9e16, unit: 'cm⁻² s⁻¹' }, 
-        ion_energy: { value: 85.4, unit: 'eV' },
-        etch_score: { value: 71.5, unit: 'point' },
-      },
-      graphs: {
-        cur: Array.from({ length: 60 }, (_, i) => ({ x: +(i / 60).toFixed(2), y: +(Math.sin(2 * Math.PI * (i / 60)) * Math.exp(-(i / 60) * 0.5) * 1.1e6 + Math.sin(4 * Math.PI * (i / 60)) * 2e5).toFixed(0) })),
-        iad: Array.from({ length: 41 }, (_, i) => ({ x: +(-10 + i * 0.5).toFixed(1), y: +Math.exp(-0.5 * Math.pow((-10 + i * 0.5) / 1.3, 2)).toFixed(3) })),
-        ied: Array.from({ length: 60 }, (_, i) => ({ x: +(10 + i * 12).toFixed(0), y: +(Math.exp(-0.5 * Math.pow((10 + i * 12 - 95) / 20, 2)) * 0.8 + Math.exp(-0.5 * Math.pow((10 + i * 12 - 480) / 80, 2)) * 0.25).toFixed(3) })),
-      },
-      parameter_impact: {
-        pressure:     Array.from({ length: 50 }, (_, i) => ({ x: +(2 + i * 0.16).toFixed(2), y: +(78.3 - i * 0.3).toFixed(1) })),
-        source_power: Array.from({ length: 50 }, (_, i) => ({ x: 100 + i * 8,                y: +(60 + i * 0.4).toFixed(1) })),
-        bias_power:   Array.from({ length: 50 }, (_, i) => ({ x: i * 20,                      y: +(50 + i * 0.6).toFixed(1) })),
-      },
-    },
-    {
-      candidate_id: 3,
-      process_params: { pressure: { value: 9, unit: 'mTorr' }, source_power: { value: 420, unit: 'W' }, bias_power: { value: 100, unit: 'W' } },
-      prediction_result: { 
-        ion_flux: { value: 6.3e16, unit: 'cm⁻² s⁻¹' },
-        ion_energy: { value: 63.2, unit: 'eV' },
-        etch_score: { value: 71.5, unit: 'point' },
-      },
-      graphs: {
-        cur: Array.from({ length: 60 }, (_, i) => ({ x: +(i / 60).toFixed(2), y: +(Math.sin(2 * Math.PI * (i / 60)) * Math.exp(-(i / 60) * 0.5) * 8.5e5 + Math.sin(4 * Math.PI * (i / 60)) * 1.6e5).toFixed(0) })),
-        iad: Array.from({ length: 41 }, (_, i) => ({ x: +(-10 + i * 0.5).toFixed(1), y: +Math.exp(-0.5 * Math.pow((-10 + i * 0.5) / 2.0, 2)).toFixed(3) })),
-        ied: Array.from({ length: 60 }, (_, i) => ({ x: +(10 + i * 12).toFixed(0), y: +(Math.exp(-0.5 * Math.pow((10 + i * 12 - 68) / 20, 2)) * 0.8 + Math.exp(-0.5 * Math.pow((10 + i * 12 - 380) / 80, 2)) * 0.25).toFixed(3) })),
-      },
-      parameter_impact: {
-        pressure:     Array.from({ length: 50 }, (_, i) => ({ x: +(2 + i * 0.16).toFixed(2), y: +(78.3 - i * 0.3).toFixed(1) })),
-        source_power: Array.from({ length: 50 }, (_, i) => ({ x: 100 + i * 8,                y: +(60 + i * 0.4).toFixed(1) })),
-        bias_power:   Array.from({ length: 50 }, (_, i) => ({ x: i * 20,                      y: +(50 + i * 0.6).toFixed(1) })),
-      },
-    },
-  ],
-};
 
 // ── 유틸 ──────────────────────────────────────────────
 function calcDashOffset(score: number): number {
@@ -140,9 +59,9 @@ const chartOpts = (xlabel: string, ylabel: string) => ({
 });
 
 // ── 경향성 그래프 컴포넌트 ─────────────────────────────
-function TrendCard({ canvasId, title, sub, xlabel, xValues, scoreFn, panelWidth }: {
+function TrendCard({ canvasId, title, sub, xlabel, data, panelWidth }: {
   canvasId: string; title: string; sub: string; xlabel: string;
-  xValues: number[]; scoreFn: (x: number) => number; panelWidth: number;
+  data: { x: number; y: number }[]; panelWidth: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -153,13 +72,13 @@ function TrendCard({ canvasId, title, sub, xlabel, xValues, scoreFn, panelWidth 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'line',
       data: {
-        labels: xValues.map(v => v.toString()),
-        datasets: [{ data: xValues.map(x => +scoreFn(x).toFixed(1)), borderColor: PR[500], borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: false }],
+        labels: data.map(d => d.x.toString()),
+        datasets: [{ data: data.map(d => d.y), borderColor: PR[500], borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: false }],
       },
       options: chartOpts(xlabel, 'Etch Score'),
     });
     return () => { chartRef.current?.destroy(); chartRef.current = null; };
-  }, [xValues, scoreFn, xlabel]);
+  }, [data, xlabel]);
 
   useEffect(() => { chartRef.current?.resize(); }, [panelWidth]);
 
@@ -242,10 +161,10 @@ export default function OptimizationPanel({ isOpen, onClose, data }: Optimizatio
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+  if (!data) return null;
 
-  const d = data ?? MOCK_DATA;
-  const current = d.current; 
-  const candidates = d.candidates;
+  const current = data.current;
+  const candidates = data.candidates;
   const selCand = candidates[selectedCandIdx];
 
   const score = current.prediction_result.etch_score.value;
@@ -257,40 +176,69 @@ export default function OptimizationPanel({ isOpen, onClose, data }: Optimizatio
     { label: 'Bias Power', unit: 'W', key: 'bias_power' as const },
   ];
 
-  // 경향성 그래프 — 선택된 후보 기준 나머지 두 파라미터 고정
-  const sp = selCand.process_params.source_power.value;
-  const bp = selCand.process_params.bias_power.value;
-  const pr = selCand.process_params.pressure.value;
-
-  const scoreModel = (p: number, s: number, b: number) =>
-    Math.min(100, 20 + (s / 500) * 35 + (b / 1500) * 25 + (1 - p / 10) * 20);
-
+  // 경향성 그래프 — parameter_impact 실데이터 사용
   const trendGraphs = [
-    { canvasId: 'trend-p', title: 'Pressure vs Etch Score', xlabel: 'pressure (mTorr)', sub: `Source Power ${sp}W, Bias Power ${bp}W 고정`, xValues: Array.from({ length: 20 }, (_, i) => +(2 + i * 0.4).toFixed(1)), scoreFn: (x: number) => scoreModel(x, sp, bp) },
-    { canvasId: 'trend-sp', title: 'Source Power vs Etch Score', xlabel: 'source power (W)', sub: `Pressure ${pr}mTorr, Bias Power ${bp}W 고정`, xValues: Array.from({ length: 20 }, (_, i) => 100 + i * 20), scoreFn: (x: number) => scoreModel(pr, x, bp) },
-    { canvasId: 'trend-bp', title: 'Bias Power vs Etch Score', xlabel: 'bias power (W)', sub: `Pressure ${pr}mTorr, Source Power ${sp}W 고정`, xValues: Array.from({ length: 20 }, (_, i) => i * 75), scoreFn: (x: number) => scoreModel(pr, sp, x) },
+    {
+      canvasId: 'trend-p',
+      title: 'Pressure vs Etch Score',
+      xlabel: 'pressure (mTorr)',
+      sub: `Source Power ${selCand.process_params.source_power.value}W, Bias Power ${selCand.process_params.bias_power.value}W 고정`,
+      data: selCand.parameter_impact.pressure,
+    },
+    {
+      canvasId: 'trend-sp',
+      title: 'Source Power vs Etch Score',
+      xlabel: 'source power (W)',
+      sub: `Pressure ${selCand.process_params.pressure.value}mTorr, Bias Power ${selCand.process_params.bias_power.value}W 고정`,
+      data: selCand.parameter_impact.source_power,
+    },
+    {
+      canvasId: 'trend-bp',
+      title: 'Bias Power vs Etch Score',
+      xlabel: 'bias power (W)',
+      sub: `Pressure ${selCand.process_params.pressure.value}mTorr, Source Power ${selCand.process_params.source_power.value}W 고정`,
+      data: selCand.parameter_impact.bias_power,
+    },
   ];
+
+  const currentBiasOk = current.process_params.bias_power.value >= 100;
+  const excludedLabels: string[] = [];
+  if (!currentBiasOk) excludedLabels.push('현재');
+  candidates.forEach((c, i) => {
+    if (c.process_params.bias_power.value < 100) excludedLabels.push(`후보 ${i + 1}`);
+  });
+  const allExcluded = !currentBiasOk && candidates.every(c => c.process_params.bias_power.value < 100);
+
+  const toXY = (xs: number[], ys: number[]) =>
+    xs.map((x, i) => ({ x, y: ys[i] ?? 0 }));
+
+  const toDistData = (pd: PlasmaDistribution | null, key: 'cur' | 'iad' | 'ied') => {
+    if (!pd) return [];
+    if (key === 'cur') return toXY(pd.cur_x_values, pd.cur_y_values);
+    if (key === 'iad') return toXY(pd.iad_x_values, pd.iad_y_values);
+    return toXY(pd.ied_x_values, pd.ied_y_values);
+  };
 
   const distGraphs = [
     {
-      canvasId: 'dist-cur', title: 'Current Density (CUR)', sub: 'RF 주기 내 전류밀도 시간 변화 — x: time (rf cycle) / y: J₀h_h (statA/cm²)', xlabel: 'time (rf cycle)', ylabel: 'J (statA/cm²)',
+      canvasId: 'dist-cur', title: 'Current Density (CUR)', sub: 'RF 주기 내 전류밀도 시간 변화', xlabel: 'time (rf cycle)', ylabel: 'J (statA/cm²)',
       datasets: [
-        { label: '현재', color: CURRENT_COLOR, data: current.graphs.cur },
-        ...candidates.map((c, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i], data: c.graphs.cur })),
+        ...(currentBiasOk ? [{ label: '현재', color: CURRENT_COLOR, data: toDistData(current.plasmaDistribution, 'cur') }] : []),
+        ...candidates.filter(c => c.process_params.bias_power.value >= 100).map((c, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i], data: toDistData(c.plasmaDistribution, 'cur') })),
       ],
     },
     {
-      canvasId: 'dist-iad', title: 'Ion Angle Distribution (IAD)', sub: '이온 입사 각도 분포 — x: angle (°) / y: IAD (a.u.)', xlabel: 'angle (°)', ylabel: 'IAD (a.u.)',
+      canvasId: 'dist-iad', title: 'Ion Angle Distribution (IAD)', sub: '이온 입사 각도 분포', xlabel: 'angle (°)', ylabel: 'IAD (a.u.)',
       datasets: [
-        { label: '현재', color: CURRENT_COLOR, data: current.graphs.iad },
-        ...candidates.map((c, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i], data: c.graphs.iad })),
+        ...(currentBiasOk ? [{ label: '현재', color: CURRENT_COLOR, data: toDistData(current.plasmaDistribution, 'iad') }] : []),
+        ...candidates.filter(c => c.process_params.bias_power.value >= 100).map((c, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i], data: toDistData(c.plasmaDistribution, 'iad') })),
       ],
     },
     {
-      canvasId: 'dist-ied', title: 'Ion Energy Distribution (IED)', sub: '이온 에너지 분포 — x: energy (eV) / y: IED (a.u.)', xlabel: 'energy (eV)', ylabel: 'IED (a.u.)',
+      canvasId: 'dist-ied', title: 'Ion Energy Distribution (IED)', sub: '이온 에너지 분포', xlabel: 'energy (eV)', ylabel: 'IED (a.u.)',
       datasets: [
-        { label: '현재', color: CURRENT_COLOR, data: current.graphs.ied },
-        ...candidates.map((c, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i], data: c.graphs.ied })),
+        ...(currentBiasOk ? [{ label: '현재', color: CURRENT_COLOR, data: toDistData(current.plasmaDistribution, 'ied') }] : []),
+        ...candidates.filter(c => c.process_params.bias_power.value >= 100).map((c, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i], data: toDistData(c.plasmaDistribution, 'ied') })),
       ],
     },
   ];
@@ -440,18 +388,38 @@ export default function OptimizationPanel({ isOpen, onClose, data }: Optimizatio
         <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
             <span style={secLabel}>물리 분포 비교</span>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
-              {[{ label: '현재', color: CURRENT_COLOR }, ...candidates.map((_, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i] }))].map(item => (
-                <span key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
-                  <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: item.color, display: 'inline-block' }} />
-                  {item.label}
+            {excludedLabels.length > 0 && (
+              <div style={{ padding: '8px', backgroundColor: SL[100], borderRadius: '8px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', color: SL[500], lineHeight: '2' }}>
+                  ※ {excludedLabels.join(', ')} 조건은 Bias Power 100W 미만으로 데이터 신뢰도 확보를 위해 물리 분포 그래프를 제공하지 않습니다.
                 </span>
-              ))}
-            </div>
+              </div>
+            )}
+            {!allExcluded && (
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                {[
+                  ...(currentBiasOk ? [{ label: '현재', color: CURRENT_COLOR }] : []),
+                  ...candidates.filter(c => c.process_params.bias_power.value >= 100).map((_, i) => ({ label: `후보 ${i + 1}`, color: CANDIDATE_COLORS[i] })),
+                ].map(item => (
+                  <span key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: SL[500] }}>
+                    <span style={{ width: '10px', height: '3px', borderRadius: '2px', backgroundColor: item.color, display: 'inline-block' }} />
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          {distGraphs.map(g => (
-            <DistCard key={g.canvasId} {...g} panelWidth={width} />
-          ))}
+          {allExcluded ? (
+            <div style={{ padding: '8px', backgroundColor: SL[100], borderRadius: '8px' }}>
+              <span style={{ fontSize: '12px', color: SL[500], lineHeight: '2' }}>
+                ※ 모든 조건의 Bias Power가 100W 미만으로 데이터 신뢰도 확보를 위해 물리 분포 그래프를 제공하지 않습니다.
+              </span>
+            </div>
+          ) : (
+            distGraphs.map(g => (
+              <DistCard key={g.canvasId} {...g} panelWidth={width} />
+            ))
+          )}
         </div>
 
         {/* 푸터 */}
