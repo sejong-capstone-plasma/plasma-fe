@@ -31,13 +31,7 @@ const WELCOME_MESSAGE =
 본 시스템은 **아르곤(Ar) 가스 기반 TCP(Planar ICP) + Bias Power** 인가 장비 환경에서
 **압력 (mTorr)**, **소스 파워 (W)**, **바이어스 파워 (W)** 조건을 학습한 모델입니다.
 
-조건을 일부만 알고 있어도 괜찮습니다. 공정에 대해 궁금한 점이 있다면 자유롭게 질문하세요.
-
-아래 형식을 참고하여 입력해 주세요:
-  · "압력 8mTorr, 소스 파워 450W, 바이어스 파워 80W 조건 분석해줘"
-  · "압력 8mTorr, 소스 파워 450W, 바이어스 파워 80W에서 Etch Rate 높이는 방향으로 최적화해줘"
-  · "압력 8mTorr 조건이랑 압력 10mTorr 조건 비교해줘"
-  · "ion flux가 뭐야?"`;
+조건을 일부만 알고 있어도 괜찮습니다. 공정에 대해 궁금한 점이 있다면 자유롭게 질문하세요.`;
 
 export interface PredictionHistoryItem {
   id: string;
@@ -98,6 +92,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string>(getCurrentSessionId());
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
   const [plasmaDistribution, setPlasmaDistribution] = useState<PlasmaDistribution | null>(null);
+  const [hasUserSent, setHasUserSent] = useState(false);
 
   const isPredictionPanelOpen = activePanelType === 'prediction';
   const isOptPanelOpen = activePanelType === 'optimization';
@@ -156,6 +151,7 @@ export default function App() {
 
   const handleSend = async (content: string) => {
     if (isSending.current) return;
+    setHasUserSent(true);
     isSending.current = true;
     lastInput.current = content;
 
@@ -668,6 +664,7 @@ export default function App() {
             lastKnownParams.current = {};
             resetSession();
             setActiveSessionId(getCurrentSessionId());
+            setHasUserSent(false);
           }}
           onSelectSession={handleSelectSession}
           sessionRefreshTrigger={sessionRefreshTrigger}
@@ -681,6 +678,7 @@ export default function App() {
             lastKnownParams.current = {};
             resetSession();
             setActiveSessionId(getCurrentSessionId());
+            setHasUserSent(false);
           }}
           />
           <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: colors.slate[50] }}>
@@ -740,6 +738,7 @@ export default function App() {
               onCancel={handleCancel}
               onFirstFocus={handleFirstFocus}
               isTyping={isTyping}
+              showChips={!hasUserSent}
             />
           </div>
         </div>

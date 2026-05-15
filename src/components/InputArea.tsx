@@ -7,6 +7,7 @@ interface InputAreaProps {
   onTextChange?: (text: string) => void;
   onFirstFocus?: () => void;
   isTyping?: boolean;
+  showChips?: boolean;
 }
 
 export interface InputAreaHandle {
@@ -14,7 +15,7 @@ export interface InputAreaHandle {
 }
 
 const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
-  ({ onSend, onCancel, onTextChange, onFirstFocus, isTyping }, ref) => {
+  ({ onSend, onCancel, onTextChange, onFirstFocus, isTyping, showChips }, ref) => {
     const [text, setText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -51,9 +52,57 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
     const canSend = Boolean(text.trim()) && !isTyping;
     const buttonActive = isTyping || canSend;
 
+    const CHIPS = [
+      { label: '예측 분석', text: '압력 8mTorr, 소스 파워 450W, 바이어스 파워 120W 조건 예측해줘' },
+      { label: '최적화', text: '압력 8mTorr, 소스 파워 450W, 바이어스 파워 120W에서 Etch Rate 높이는 방향으로 최적화해줘' },
+      { label: '비교 분석', text: '압력 8mTorr 조건이랑 압력 10mTorr 조건 비교해줘' },
+    ];
+
     return (
       <div className="pb-3 px-5">
         <div className="max-w-3xl mx-auto">
+
+          {showChips && (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              {CHIPS.map(chip => (
+                <button
+                  key={chip.label}
+                  onClick={() => {
+                    setText(chip.text);
+                    onTextChange?.(chip.text);
+                    if (textareaRef.current) {
+                      textareaRef.current.style.height = 'auto';
+                      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+                      textareaRef.current.focus();
+                    }
+                  }}
+                  style={{
+                    fontSize: typography.size.base,
+                    color: colors.slate[500],
+                    backgroundColor: colors.surface.white,
+                    border: `1px solid ${colors.slate[400]}`,
+                    borderRadius: '999px',
+                    padding: '5px 14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.backgroundColor = colors.primary[50];
+                    e.currentTarget.style.borderColor = colors.primary[400];
+                    e.currentTarget.style.color = colors.primary[600];
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.backgroundColor = colors.surface.white;
+                    e.currentTarget.style.borderColor = colors.slate[300];
+                    e.currentTarget.style.color = colors.slate[500];
+                  }}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div
             className="relative flex flex-col rounded-[24px] overflow-hidden"
             style={{
@@ -68,7 +117,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
               maxLength={500}
               rows={1}
               className="w-full bg-transparent py-2 px-5 pt-4 resize-none focus:outline-none placeholder:text-slate-400 overflow-y-auto"
-              style={{ fontSize: typography.size.md, minHeight:'24px', maxHeight: '200px' }}
+              style={{ fontSize: typography.size.md, minHeight: '24px', maxHeight: '200px' }}
               placeholder="분석하고 싶은 조건을 입력해 보세요..."
               value={text}
               onChange={handleChange}
@@ -80,9 +129,9 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
                 }
               }}
             />
-            
+
             <div className="flex justify-end items-center px-3.5 pb-3.5">
-              <button 
+              <button
                 onClick={handleButtonClick}
                 disabled={!buttonActive}
                 style={{

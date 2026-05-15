@@ -61,8 +61,11 @@ export default function ChatArea(
               m.type === 'comparison-result'
             );
 
+            const prevMsg = messages[index - 1];
+            const isRoleSwitch = prevMsg && prevMsg.role !== msg.role;
+
           return (
-            <div key={index}>
+            <div key={index} className={isRoleSwitch ? 'mt-6' : ''}>
               <div
                 ref={index === lastUserIndex ? lastUserRef : undefined}
                 className="scroll-mt-16"
