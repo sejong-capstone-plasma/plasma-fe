@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { colors, typography } from '../styles/tokens';
 import type { OptimizationResult, PlasmaDistribution } from '../types/api';
+import { formatUnit } from '../utils/formatUnit'
 
 Chart.register(...registerables);
 
@@ -323,7 +324,9 @@ export default function OptimizationPanel({ isOpen, onClose, data }: Optimizatio
                   <span style={{ fontSize: '11px', fontWeight: typography.weight.medium, color: SL[900] }}>
                     {formatValue(current.prediction_result[k].value)}
                   </span>
-                  <span style={{ fontSize: '10px', color: SL[400], marginLeft: '2px' }}>{current.prediction_result[k].unit}</span>
+                  <span style={{ fontSize: '10px', color: SL[400], marginLeft: '2px' }}>
+                    {formatUnit(current.prediction_result[k].unit)}
+                    </span>
                 </span>
               </div>
             ))}
@@ -351,7 +354,7 @@ export default function OptimizationPanel({ isOpen, onClose, data }: Optimizatio
                   { label: 'Pressure (mTorr)', cur: current.process_params.pressure.value, cands: candidates.map(c => c.process_params.pressure.value) },
                   { label: 'Source Power (W)', cur: current.process_params.source_power.value, cands: candidates.map(c => c.process_params.source_power.value) },
                   { label: 'Bias Power (W)', cur: current.process_params.bias_power.value, cands: candidates.map(c => c.process_params.bias_power.value) },
-                  { label: 'Ion Flux', cur: formatValue(current.prediction_result.ion_flux.value), cands: candidates.map(c => formatValue(c.prediction_result.ion_flux.value)) },
+                  { label: 'Ion Flux(cm⁻²s⁻¹)', cur: formatValue(current.prediction_result.ion_flux.value), cands: candidates.map(c => formatValue(c.prediction_result.ion_flux.value)) },
                   { label: 'Ion Energy (eV)', cur: Number(current.prediction_result.ion_energy.value.toFixed(2)), cands: candidates.map(c => Number(c.prediction_result.ion_energy.value.toFixed(2))) },
                 ].map((row, ri) => (
                   <tr key={ri}>

@@ -14,6 +14,9 @@ export interface BackendChatMessageResponse {
   inputText: string;
   createdAt: string;
   validations: BackendValidationResponse[];
+  question?: {
+    answerText: string;
+  } | null;
 }
 
 export function adaptResponse(backend: BackendValidationResponse): ExtractResponse {
@@ -122,6 +125,7 @@ export interface ExtractResult {
   validationId: number;
   response: ExtractResponse;
   allParams: Record<string, number>; 
+  answerText?: string | null;
 }
 
 export async function extractParams(inputText: string, signal?: AbortSignal): Promise<ExtractResult> {
@@ -153,12 +157,13 @@ export async function extractParams(inputText: string, signal?: AbortSignal): Pr
       validationId: validation.validationId,
       response: adaptResponse(validation),
       allParams,
+      answerText: data.question?.answerText ?? null,
     };
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
-      return { messageId: -1, validationId: -1, response: { success: false, message: '__CANCELLED__' }, allParams: {} };
+      return { messageId: -1, validationId: -1, answerText: null, response: { success: false, message: '__CANCELLED__' }, allParams: {} };
     }
-    return { messageId: -1, validationId: -1, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }, allParams: {} };
+    return { messageId: -1, validationId: -1, answerText: null, response: { success: false, message: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }, allParams: {} };
   }
 }
 

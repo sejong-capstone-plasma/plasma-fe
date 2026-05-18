@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { colors, typography } from '../styles/tokens';
 import type { ComparisonResult } from '../types/api';
+import { formatUnit } from '../utils/formatUnit';
 
 Chart.register(...registerables);
 
@@ -312,7 +313,10 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                                     <div key={p.key} style={rowCard}>
                                         <span style={{ fontSize: '11px', color: SL[500], flexShrink: 0 }}>{PARAM_LABEL[p.key] ?? p.key}</span>
                                         <span style={{ fontSize: '11px', fontWeight: typography.weight.medium, color: SL[900], whiteSpace: 'nowrap', marginLeft: '4px' }}>
-                                            {p.value ?? '—'} <span style={{ fontSize: '10px', color: SL[400], fontWeight: typography.weight.regular }}>{p.unit}</span>
+                                            {p.value ?? '—'}
+                                            <span style={{ fontSize: '10px', color: SL[400], fontWeight: typography.weight.regular }}>
+                                                {p.unit}
+                                            </span>
                                         </span>
                                     </div>
                                 ))}
@@ -338,7 +342,10 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                                         <div key={key} style={rowCard}>
                                             <span style={{ fontSize: '11px', color: SL[500], flexShrink: 0 }}>{key === 'ion_flux' ? 'Ion Flux' : 'Ion Energy'}</span>
                                             <span style={{ fontSize: '11px', fontWeight: typography.weight.medium, color: SL[900], whiteSpace: 'nowrap', marginLeft: '4px' }}>
-                                                {formatValue(field.value)} <span style={{ fontSize: '10px', color: SL[400], fontWeight: typography.weight.regular }}>{field.unit}</span>
+                                                {formatValue(field.value)}
+                                                <span style={{ fontSize: '10px', color: SL[400], fontWeight: typography.weight.regular }}>
+                                                    {formatUnit(field.unit)}
+                                                </span>
                                             </span>
                                         </div>
                                     );
@@ -362,7 +369,9 @@ export default function ComparisonPanel({ isOpen, onClose, data }: ComparisonPan
                                 <div style={{ fontSize: '15px', fontWeight: typography.weight.medium, color: value >= 0 ? '#059669' : '#dc2626' }}>
                                     {value >= 0 ? '+' : ''}{formatValue(value)}
                                 </div>
-                                <div style={{ fontSize: '10px', color: SL[400], marginTop: '2px' }}>{unit}</div>
+                                <div style={{ fontSize: '10px', color: SL[400], marginTop: '2px' }}>
+                                    {formatUnit(unit)}
+                                </div>
                             </div>
                         ))}
                     </div>

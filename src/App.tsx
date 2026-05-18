@@ -166,7 +166,7 @@ export default function App() {
 
     setIsTyping(true);
 
-    const [{ messageId, validationId, response: result, allParams }] = await Promise.all([
+    const [{ messageId, validationId, response: result, allParams, answerText }] = await Promise.all([
       extractParams(content, ctrl.signal),
       new Promise(r => setTimeout(r, 1200)),
     ]);
@@ -184,6 +184,14 @@ export default function App() {
     currentValidationId.current = validationId;
     lastKnownParams.current = allParams;
     setSessionRefreshTrigger(prev => prev + 1)
+    
+    if (answerText) {
+      await typeMessage(answerText);
+      setIsTyping(false);
+      isSending.current = false;
+      abortCtrlRef.current = null;
+      return;
+    }
 
     if (result.success && result.code === 'READY_FOR_COMPARISON') {
       await typeMessage(result.message);

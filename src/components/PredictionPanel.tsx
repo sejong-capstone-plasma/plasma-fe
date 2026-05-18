@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
 import { colors, typography } from '../styles/tokens';
 import type { PredictionResult,  PlasmaDistribution } from '../types/api';
+import { formatUnit } from '../utils/formatUnit';
 
 Chart.register(...registerables);
 
@@ -187,8 +188,8 @@ const GRAPHS = plasma ? [
   ];
 
   const PLASMA = [
-    { key: 'ion_flux' as const, label: 'Ion Flux', unit: prediction?.ion_flux?.unit ?? 'cm⁻² s⁻¹' },
-    { key: 'ion_energy' as const, label: 'Ion Energy', unit: prediction?.ion_energy?.unit ?? 'eV' },
+    { key: 'ion_flux' as const, label: 'Ion Flux', unit: formatUnit(prediction?.ion_flux?.unit ?? 'cm^-2 s^-1') },
+    { key: 'ion_energy' as const, label: 'Ion Energy', unit: formatUnit(prediction?.ion_energy?.unit ?? 'eV') },
   ];
 
   return (
