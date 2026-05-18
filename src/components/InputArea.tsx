@@ -80,7 +80,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(
                     fontSize: typography.size.base,
                     color: colors.slate[500],
                     backgroundColor: colors.surface.white,
-                    border: `1px solid ${colors.slate[400]}`,
+                    border: `0.5px solid ${colors.slate[300]}`,
                     borderRadius: '999px',
                     padding: '5px 14px',
                     cursor: 'pointer',

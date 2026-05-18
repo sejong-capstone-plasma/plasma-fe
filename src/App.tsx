@@ -31,7 +31,7 @@ const WELCOME_MESSAGE =
 본 시스템은 **아르곤(Ar) 가스 기반 TCP(Planar ICP) + Bias Power** 인가 장비 환경에서
 **압력 (mTorr)**, **소스 파워 (W)**, **바이어스 파워 (W)** 조건을 학습한 모델입니다.
 
-조건을 일부만 알고 있어도 괜찮습니다. 공정에 대해 궁금한 점이 있다면 자유롭게 질문하세요.`;
+공정에 대해 궁금한 점이 있다면 자유롭게 질문하세요.`;
 
 export interface PredictionHistoryItem {
   id: string;
@@ -81,6 +81,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [hasUserSent, setHasUserSent] = useState(false);
   const [activePanelType, setActivePanelType] = useState<'prediction' | 'optimization' | 'comparison' | null>(null);
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null);
   const [optimizationData, setOptimizationData] = useState<OptimizationResult | null>(null);
@@ -92,7 +93,6 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string>(getCurrentSessionId());
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
   const [plasmaDistribution, setPlasmaDistribution] = useState<PlasmaDistribution | null>(null);
-  const [hasUserSent, setHasUserSent] = useState(false);
 
   const isPredictionPanelOpen = activePanelType === 'prediction';
   const isOptPanelOpen = activePanelType === 'optimization';
