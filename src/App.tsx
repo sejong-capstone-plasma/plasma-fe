@@ -256,7 +256,10 @@ export default function App() {
           '예측 분석을 실행하고 있습니다...';
 
     setMessages(prev => [...prev, {
-      role: 'assistant', content: '', type: 'default', loadingText,
+      role: 'assistant',
+      content: '',
+      type: 'default',
+      loadingText,
     }]);
     setIsTyping(true);
 
@@ -337,6 +340,17 @@ export default function App() {
         }),
         type: 'optimization-result',
       }]);
+
+      const summary = (confirmRes.optimization as any).explanation?.summary;
+      if (summary) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: summary,
+          type: 'default',
+        }]);
+        await typeMessage(summary, 6);
+      }
+
       setActivePanelType('optimization');
       return;
     }
@@ -415,17 +429,27 @@ export default function App() {
         predictionData: pred,
         plasmaDistribution: confirmRes.plasmaDistribution ?? null,
       };
-      setPredictionHistory(prev => [historyItem, ...prev]);
 
+      setPredictionHistory(prev => [historyItem, ...prev]);
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: JSON.stringify({
           historyId,
           etch_score: pred.prediction_result.etch_score.value,
-          label: historyItem.label
+          label: historyItem.label,
         }),
         type: 'prediction-result',
       }]);
+
+      const summary = (pred as any).explanation?.summary;
+      if (summary) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: summary,
+          type: 'default',
+        }]);
+        await typeMessage(summary, 6);
+      }
 
       setPredictionData(pred);
       setPlasmaDistribution(confirmRes.plasmaDistribution ?? null);
@@ -489,6 +513,7 @@ export default function App() {
     const leftP = cmpData.left.parameters.find(p => p.key === 'pressure')?.value ?? '?';
     const rightP = cmpData.right.parameters.find(p => p.key === 'pressure')?.value ?? '?';
     const cmpLabel = `A(${leftP}mTorr) vs B(${rightP}mTorr)`;
+
     setComparisonHistory(prev => [{
       id: histId,
       createdAt: new Date(),
@@ -497,6 +522,7 @@ export default function App() {
       rightLabel,
       comparisonData: cmpData
     }, ...prev]);
+    
     setComparisonData(cmpData);
     setActivePanelType('comparison');
     setMessages(prev => [...prev, {
@@ -511,6 +537,16 @@ export default function App() {
       }),
       type: 'comparison-result',
     }]);
+
+    const summary = (confirmRes.comparison as any).explanation?.summary;
+    if (summary) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: summary,
+        type: 'default',
+      }]);
+      await typeMessage(summary, 6);
+    }
   };
 
   // ── 재검증 ────────────────────────────────────────────
@@ -625,7 +661,11 @@ export default function App() {
           restoredHistory.push(historyItem);
           restored.push({
             role: 'assistant',
-            content: JSON.stringify({ historyId, etch_score: pred.prediction_result.etch_score.value, label: historyItem.label }),
+            content: JSON.stringify({
+              historyId,
+              etch_score: pred.prediction_result.etch_score.value,
+              label: historyItem.label,
+            }),
             type: 'prediction-result',
           });
         }

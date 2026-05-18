@@ -25,14 +25,22 @@ interface ChatProps {
 
 // ── 마크다운 굵기 파싱 ──────────────────────────────────
 const renderContent = (text: string) => {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const converted = text
+    .replace(/cm\^-2/g, 'cm⁻²')
+    .replace(/s\^-1/g, 's⁻¹')
+    .replace(/cm\^-3/g, 'cm⁻³')
+    .replace(/eV/g, 'eV')
+    .replace(/\^2/g, '²')
+    .replace(/\^3/g, '³')
+    .replace(/\^-1/g, '⁻¹')
+    .replace(/\^-2/g, '⁻²');
+  const parts = converted.split(/(\*\*[^*]+\*\*|[A-Za-z0-9][A-Za-z0-9_.+\-^*/×÷=<>%()[\]{}@#~²³°±⁻¹²³]*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return (
-        <strong key={i} style={{ fontWeight: 600, color: colors.slate[900] }}>
-          {part.slice(2, -2)}
-        </strong>
-      );
+      return <strong key={i} style={{ fontWeight: 600, color: colors.slate[900] }}>{part.slice(2, -2)}</strong>;
+    }
+    if (/^[A-Za-z0-9]/.test(part)) {
+      return <strong key={i} style={{ fontWeight: 600, color: colors.slate[900] }}>{part}</strong>;
     }
     return part;
   });
@@ -826,7 +834,7 @@ export default function ChatTypes({ role, content, isTyping, isLastAssistant,
     }
     return (
       <div style={{ fontSize: typography.size.md, lineHeight: typography.lineHeight.normal }} className="whitespace-pre-wrap">
-        {renderContent(content)}
+        {isUser ? content : renderContent(content)}
       </div>
     );
   };

@@ -109,6 +109,9 @@ export interface PredictionResult {
     ion_energy: { value: number, unit: string }
     etch_score: { value: number, unit: string }
   };
+  explanation?: {
+    summary: string;
+  };
   graphs: {
     cur: { x: number; y: number }[]; 
     iad: { x: number; y: number }[]; 
@@ -174,6 +177,9 @@ export interface OptimizationCurrent {
 export interface OptimizationResult {
   current:      OptimizationCurrent;
   candidates:   OptimizationCandidate[];  // etch_score 내림차순, 최대 3개
+  explanation?: {
+    summary: string;
+  };
 }
 
 export interface ConfirmResponse {
@@ -212,5 +218,7 @@ export interface ComparisonResult {
     etchScoreDelta:  number;
     etchScoreUnit:   string;
   };
-  summary: string | null;
+  explanation?: {
+    summary: string;
+  };
 }
